@@ -18,7 +18,7 @@ import com.twitter.heron.api.topology.BaseComponent;
 /**
  * Created by zhengyang on 25/6/17.
  */
-public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
+public abstract class BaseElasticBolt extends BaseComponent implements IRichBolt {
   private static final long serialVersionUID = 4309732999277305080L;
 
   @Override
