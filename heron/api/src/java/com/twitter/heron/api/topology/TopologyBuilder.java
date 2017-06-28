@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.twitter.heron.api.HeronTopology;
+import com.twitter.heron.api.bolt.BaseElasticBolt;
 import com.twitter.heron.api.bolt.BasicBoltExecutor;
 import com.twitter.heron.api.bolt.IBasicBolt;
 import com.twitter.heron.api.bolt.IRichBolt;
@@ -114,6 +115,21 @@ public class TopologyBuilder {
    * @return use the returned object to declare the inputs to this component
    */
   public BoltDeclarer setBolt(String id, IRichBolt bolt, Number parallelismHint) {
+    validateComponentName(id);
+    BoltDeclarer b = new BoltDeclarer(id, bolt, parallelismHint);
+    bolts.put(id, b);
+    return b;
+  }
+
+  /**
+   * Define a new Elastic bolt in this topology with the specified amount of parallelism.
+   *
+   * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
+   * @param bolt the bolt
+   * @param parallelismHint the number of tasks that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
+   * @return use the returned object to declare the inputs to this component
+   */
+  public BoltDeclarer setBolt(String id, BaseElasticBolt bolt, Number parallelismHint) {
     validateComponentName(id);
     BoltDeclarer b = new BoltDeclarer(id, bolt, parallelismHint);
     bolts.put(id, b);

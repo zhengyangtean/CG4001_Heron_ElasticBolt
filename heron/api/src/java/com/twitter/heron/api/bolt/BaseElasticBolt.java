@@ -14,15 +14,27 @@
 package com.twitter.heron.api.bolt;
 
 import com.twitter.heron.api.topology.BaseComponent;
+import com.twitter.heron.api.tuple.Tuple;
 
 /**
  * Created by zhengyang on 25/6/17.
  */
-public abstract class BaseElasticBolt extends BaseComponent implements IRichBolt {
+public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
+
+  public static void test(){
+    System.out.print("IElasticBolt");
+  }
 
   @Override
   public void cleanup() {
   }
 
+  @Override
+  public final void execute(Tuple input) {
+    executeLogic(input);
+  }
+
+  public void executeLogic(Tuple input){
+  }
 }
