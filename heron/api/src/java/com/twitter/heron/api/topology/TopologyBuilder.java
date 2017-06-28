@@ -18,9 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.twitter.heron.api.HeronTopology;
-import com.twitter.heron.api.bolt.BaseElasticBolt;
 import com.twitter.heron.api.bolt.BasicBoltExecutor;
 import com.twitter.heron.api.bolt.IBasicBolt;
+import com.twitter.heron.api.bolt.IElasticBolt;
 import com.twitter.heron.api.bolt.IRichBolt;
 import com.twitter.heron.api.generated.TopologyAPI;
 import com.twitter.heron.api.spout.IRichSpout;
@@ -126,12 +126,24 @@ public class TopologyBuilder {
    *
    * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
    * @param bolt the bolt
-   * @param parallelismHint the number of tasks that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
+   * @param numCore the number of core that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
    * @return use the returned object to declare the inputs to this component
    */
-  public BoltDeclarer setBolt(String id, BaseElasticBolt bolt, Number parallelismHint) {
+  public BoltDeclarer setBolt(String id, IElasticBolt bolt, int numCore) {
     validateComponentName(id);
-    BoltDeclarer b = new BoltDeclarer(id, bolt, parallelismHint);
+
+    // Validating number of core
+    int cores = Runtime.getRuntime().availableProcessors();
+
+    if (numCore > cores){
+      bolt.setNumCore(cores);
+    } else if (numCore < 1){
+      bolt.setNumCore(1);
+    } else {
+      bolt.setNumCore(numCore);
+    }
+
+    BoltDeclarer b = new BoltDeclarer(id, bolt);
     bolts.put(id, b);
     return b;
   }

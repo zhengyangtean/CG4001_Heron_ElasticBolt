@@ -21,9 +21,10 @@ import com.twitter.heron.api.tuple.Tuple;
  */
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
+  private int numCore = -1;
 
-  public static void test(){
-    System.out.print("IElasticBolt");
+  public void test() {
+    System.out.printf("IElasticBolt:%d", this.getNumCore());
   }
 
   @Override
@@ -36,5 +37,13 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void executeLogic(Tuple input){
+  }
+
+  public int getNumCore() {
+    return numCore;
+  }
+
+  public void setNumCore(int numCore){
+    this.numCore = numCore;
   }
 }

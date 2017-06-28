@@ -20,5 +20,9 @@ package com.twitter.heron.api.bolt;
  * to use to implement components of the topology.
  */
 public interface IElasticBolt extends IRichBolt {
+  // for users to set maximum number of core/threads used
+  void setNumCore(int numCore);
+
+  int getNumCore();
 
 }
