@@ -14,6 +14,10 @@
 
 package com.twitter.heron.api.bolt;
 
+import java.util.ArrayList;
+
+import com.twitter.heron.api.tuple.Tuple;
+
 /**
  * When writing topologies using Java, {@link IRichBolt} and
  * {@link com.twitter.heron.api.spout.IRichSpout} are the main interfaces
@@ -24,5 +28,7 @@ public interface IElasticBolt extends IRichBolt {
   void setNumCore(int numCore);
 
   int getNumCore();
+
+  void loadTuples(ArrayList<Tuple> tupleList);
 
 }

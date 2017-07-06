@@ -13,6 +13,8 @@
 //  limitations under the License.
 package com.twitter.heron.api.bolt;
 
+import java.util.ArrayList;
+
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 
@@ -46,4 +48,10 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void setNumCore(int numCore){
     this.numCore = numCore;
   }
+
+  public void loadTuples(ArrayList<Tuple> tupleList){
+    System.out.println(tupleList);
+  };
+
+
 }
