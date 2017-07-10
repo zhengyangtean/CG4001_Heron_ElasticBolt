@@ -27,6 +27,7 @@ import com.twitter.heron.api.generated.TopologyAPI;
 import com.twitter.heron.api.metric.GlobalMetrics;
 import com.twitter.heron.api.serializer.IPluggableSerializer;
 import com.twitter.heron.api.topology.IUpdatable;
+import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.utils.Utils;
 import com.twitter.heron.common.basics.Communicator;
 import com.twitter.heron.common.basics.SingletonRegistry;
@@ -196,7 +197,6 @@ public class BoltInstance implements IInstance {
 
       if (bolt instanceof IElasticBolt){
         long startExecuteTuple = System.nanoTime();
-        List<TupleImpl> tuplesList = new ArrayList<>();
 
         // load all available tuples
         for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
@@ -208,25 +208,20 @@ public class BoltInstance implements IInstance {
           TupleImpl t = new TupleImpl(topologyContext, stream, dataTuple.getKey(),
               dataTuple.getRootsList(), values, startExecuteTuple, false, sourceTaskId);
 
-          tuplesList.add(t);
-        }
+          ((IElasticBolt) bolt).loadTuples(t);
 
-//        ((IElasticBolt) bolt).loadTuples(tuplesList);
-        System.out.println(bolt);
+          // record the end of a tuple execution
+          long endExecuteTuple = System.nanoTime();
 
-        // record the end of a tuple execution
-        long endExecuteTuple = System.nanoTime();
+          long executeLatency = endExecuteTuple - startExecuteTuple;
 
-        long executeLatency = endExecuteTuple - startExecuteTuple;
-
-        // Invoke user-defined execute task hook
-        for (TupleImpl t : tuplesList){
+          // Invoke user-defined execute task hook
           topologyContext.invokeHookBoltExecute(t, Duration.ofNanos(executeLatency));
+
+          // Update metrics
+          boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
         }
-
-        // Update metrics
-        boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
-
+        ((IElasticBolt) bolt).execute();
       } else {
         for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
           long startExecuteTuple = System.nanoTime();

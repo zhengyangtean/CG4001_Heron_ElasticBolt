@@ -14,6 +14,7 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
@@ -24,9 +25,11 @@ import com.twitter.heron.api.tuple.Tuple;
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
   private int numCore = -1;
+  private boolean initialized = false;
+  private LinkedList<Tuple> tupleQueue;
 
   public void test() {
-    System.out.printf("IElasticBolt:%d", this.getNumCore());
+    System.out.println("versiontest");
   }
 
   @Override
@@ -35,11 +38,20 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   @Override
   public final void execute(Tuple input) {
+    if (initialized == false){
+      initalizeBolt();
+      initialized = true;
+    }
     executeLogic(input);
   }
 
-  public void executeLogic(Tuple input){
+  public final void execute(){
+    while (!tupleQueue.isEmpty()){
+      executeLogic(tupleQueue.poll());
+    }
   }
+
+  public void executeLogic(Tuple input){}
 
   public int getNumCore() {
     return numCore;
@@ -49,9 +61,23 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     this.numCore = numCore;
   }
 
-  public void loadTuples(ArrayList<Tuple> tupleList){
-    System.out.println(tupleList);
-  };
+  public void loadTuples(Tuple t){
+    if (tupleQueue == null){
+      tupleQueue = new LinkedList<>();
+    }
+    try {
+      System.out.println(tupleQueue.size());
+      tupleQueue.add(t);
+    } catch (Exception e) {
+      System.out.println("ErrorLoadingElasticTuples");
+    }
+
+  }
+
+  public void initalizeBolt(){
+    System.out.println("initializedddds");
+  }
+
 
 
 }
