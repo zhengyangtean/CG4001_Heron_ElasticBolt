@@ -23,6 +23,12 @@ pex_binary(
     deps = [":example-py"],
 )
 
+pex_binary(
+    name = "window_size",
+    srcs = ["window_size_topology.py"],
+    deps = [":example-py"],
+)
+
 # without main method
 pex_binary(
     name = "custom_grouping",
@@ -36,4 +42,13 @@ pex_binary(
     deps = [":example-py"],
 )
 
+# dsl examples
+pex_binary(
+    name = "word_count_dsl",
+    srcs = ["word_count_dsl.py"],
+    deps = [
+      '//heron/api/src/python:heron-python-py',
+      '//heron/dsl/src/python:heron-pythondsl-py',
+    ],
+)
 
