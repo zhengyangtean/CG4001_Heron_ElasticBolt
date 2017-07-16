@@ -19,6 +19,7 @@
 
 #include <list>
 #include <map>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -45,6 +46,7 @@ class TMasterClient;
 class StreamConsumers;
 class XorManager;
 class TupleCache;
+class NeighbourCalculator;
 
 class StMgr {
  public:
@@ -62,9 +64,13 @@ class StMgr {
   // Called by tmaster client when a new physical plan is available
   void NewPhysicalPlan(proto::system::PhysicalPlan* pplan);
   void HandleStreamManagerData(const sp_string& _stmgr_id,
-                               const proto::stmgr::TupleStreamMessage2& _message);
+                               proto::stmgr::TupleStreamMessage2* _message);
   void HandleInstanceData(sp_int32 _task_id, bool _local_spout,
                           proto::system::HeronTupleSet* _message);
+  // Called when an instance does checkpoint and sends its checkpoint
+  // to the stmgr to save it
+  void HandleStoreInstanceStateCheckpoint(const proto::ckptmgr::InstanceStateCheckpoint& _message,
+                                          const proto::system::Instance& _instance);
   void DrainInstanceData(sp_int32 _task_id, proto::system::HeronTupleSet2* _tuple);
   const proto::system::PhysicalPlan* GetPhysicalPlan() const;
 
@@ -78,6 +84,18 @@ class StMgr {
   void SendStopBackPressureToOtherStMgrs();
   void StartTMasterClient();
   bool DidAnnounceBackPressure();
+  void HandleDeadStMgrConnection(const sp_string& _stmgr);
+  void HandleAllStMgrClientsRegistered();
+  void HandleDeadInstance(sp_int32 _task_id);
+  void HandleAllInstancesConnected();
+
+  // Handle checkpoint message coming from an upstream task to a downstream task
+  void HandleDownStreamStatefulCheckpoint(
+                                const proto::ckptmgr::DownstreamStatefulCheckpoint& _message);
+
+  // Handle RestoreInstanceStateResponse message from local instance
+  void HandleRestoreInstanceStateResponse(sp_int32 _task_id, const proto::system::Status& _status,
+                                          const std::string& _checkpoint_id);
 
  private:
   void OnTMasterLocationFetch(proto::tmaster::TMasterLocation* _tmaster, proto::system::StatusCode);
@@ -144,6 +162,8 @@ class StMgr {
   XorManager* xor_mgrs_;
   // Tuple Cache to optimize message building
   TupleCache* tuple_cache_;
+  // Neighbour Calculator for stateful processing
+  NeighbourCalculator* neighbour_calculator_;
 
   // This is the topology structure
   // that contains the full component objects
@@ -162,14 +182,10 @@ class StMgr {
   sp_int32 metricsmgr_port_;
   sp_int32 shell_port_;
 
-  proto::system::HeronTupleSet2 current_control_tuple_set_;
   std::vector<sp_int32> out_tasks_;
 
   bool is_acking_enabled;
-
-  proto::system::HeronTupleSet2* tuple_set_from_other_stmgr_;
-
-  sp_string heron_tuple_set_2_ = "heron.proto.system.HeronTupleSet2";
+  bool is_stateful_;
 
   sp_int64 high_watermark_;
   sp_int64 low_watermark_;
