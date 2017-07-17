@@ -29,7 +29,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private LinkedList<Tuple> tupleQueue;
 
   public void test() {
-    System.out.println("versiontest");
+    System.out.println("Num Cores: " + numCore);
   }
 
   @Override
