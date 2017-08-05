@@ -26,6 +26,7 @@ import com.google.protobuf.Message;
 
 import com.twitter.heron.api.Config;
 import com.twitter.heron.api.bolt.IBolt;
+import com.twitter.heron.api.bolt.IElasticBolt;
 import com.twitter.heron.api.bolt.OutputCollector;
 import com.twitter.heron.api.generated.TopologyAPI;
 import com.twitter.heron.api.metric.GlobalMetrics;
@@ -249,31 +250,63 @@ public class BoltInstance implements IInstance {
             stream.getComponentName(), stream.getId()).size();
         int sourceTaskId = tuples.getSrcTaskId();
 
-        for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
+        if (bolt instanceof IElasticBolt) {
           long startExecuteTuple = System.nanoTime();
-          // Create the value list and fill the value
-          List<Object> values = new ArrayList<>(nValues);
-          for (int i = 0; i < nValues; i++) {
-            values.add(serializer.deserialize(dataTuple.getValues(i).toByteArray()));
+          for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
+            // Create the value list and fill the value
+            List<Object> values = new ArrayList<>(nValues);
+            for (int i = 0; i < nValues; i++) {
+              values.add(serializer.deserialize(dataTuple.getValues(i).toByteArray()));
+            }
+
+            // Decode the tuple
+            TupleImpl t = new TupleImpl(topologyContext, stream, dataTuple.getKey(),
+                dataTuple.getRootsList(), values, startExecuteTuple, false, sourceTaskId);
+
+            // Load ElasticBolt
+            ((IElasticBolt) bolt).loadTuples(t);
+
+            // record the end of a tuple execution
+            long endExecuteTuple = System.nanoTime();
+
+            long executeLatency = endExecuteTuple - startExecuteTuple;
+
+            // Invoke user-defined execute task hook
+            topologyContext.invokeHookBoltExecute(t, Duration.ofNanos(executeLatency));
+
+            // Update metrics
+            boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
 
-          // Decode the tuple
-          TupleImpl t = new TupleImpl(topologyContext, stream, dataTuple.getKey(),
-              dataTuple.getRootsList(), values, startExecuteTuple, false, sourceTaskId);
+          ((IElasticBolt) bolt).execute();
 
-          // Delegate to the use defined bolt
-          bolt.execute(t);
+        } else {
+          for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
+            long startExecuteTuple = System.nanoTime();
+            // Create the value list and fill the value
+            List<Object> values = new ArrayList<>(nValues);
+            for (int i = 0; i < nValues; i++) {
+              values.add(serializer.deserialize(dataTuple.getValues(i).toByteArray()));
+            }
 
-          // record the end of a tuple execution
-          long endExecuteTuple = System.nanoTime();
+            // Decode the tuple
+            TupleImpl t = new TupleImpl(topologyContext, stream, dataTuple.getKey(),
+                dataTuple.getRootsList(), values, startExecuteTuple, false, sourceTaskId);
 
-          long executeLatency = endExecuteTuple - startExecuteTuple;
+            // Delegate to the use defined bolt
+            bolt.execute(t);
 
-          // Invoke user-defined execute task hook
-          topologyContext.invokeHookBoltExecute(t, Duration.ofNanos(executeLatency));
+            // record the end of a tuple execution
+            long endExecuteTuple = System.nanoTime();
 
-          // Update metrics
-          boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
+            long executeLatency = endExecuteTuple - startExecuteTuple;
+
+            // Invoke user-defined execute task hook
+            topologyContext.invokeHookBoltExecute(t, Duration.ofNanos(executeLatency));
+
+            // Update metrics
+            boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
+          }
         }
 
         // To avoid spending too much time
