@@ -126,24 +126,18 @@ public class TopologyBuilder {
    *
    * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
    * @param bolt the bolt
-   * @param numCore the number of core that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
+   * @param desiredParallelism the number of core that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
    * @return use the returned object to declare the inputs to this component
    */
-  public BoltDeclarer setBolt(String id, IElasticBolt bolt, int numCore) {
+  public BoltDeclarer setBolt(String id, IElasticBolt bolt,  int desiredParallelism) {
     validateComponentName(id);
 
-    // Validating number of core
+    // Validating number of threads to be always less than that of number of cores in java system
     int cores = Runtime.getRuntime().availableProcessors();
 
-    if (numCore > cores){
-      bolt.setNumCore(cores);
-    } else if (numCore < 1){
-      bolt.setNumCore(1);
-    } else {
-      bolt.setNumCore(numCore);
-    }
+    bolt.setNumCore(cores);
 
-    BoltDeclarer b = new BoltDeclarer(id, bolt);
+    BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
     bolts.put(id, b);
     return b;
   }

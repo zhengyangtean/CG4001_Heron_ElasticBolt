@@ -38,8 +38,8 @@ public class BoltDeclarer extends BaseComponentDeclarer<BoltDeclarer> {
     bolt.declareOutputFields(output);
   }
 
-  public BoltDeclarer(String name, IElasticBolt bolt) {
-    super(name, bolt, 1); // There should be only 1 instance of elastic bolt for each different bolt
+  public BoltDeclarer(String name, IElasticBolt bolt, Number taskParallelism) {
+    super(name, bolt, taskParallelism);
     inputs = new LinkedList<TopologyAPI.InputStream.Builder>();
     output = new OutputFieldsGetter();
     bolt.declareOutputFields(output);
