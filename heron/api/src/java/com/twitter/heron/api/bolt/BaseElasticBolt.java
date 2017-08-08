@@ -37,21 +37,17 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   @Override
-  public final void execute(Tuple input) {
-    if (initialized == false){
+  public void execute(Tuple tuple) {
+  }
+
+  public final void runBolt(){
+    if (!initialized){
       initalizeBolt();
-      initialized = true;
     }
-    executeLogic(input);
-  }
-
-  public final void execute(){
     while (!tupleQueue.isEmpty()){
-      executeLogic(tupleQueue.poll());
+      execute(tupleQueue.poll());
     }
   }
-
-  public void executeLogic(Tuple input){}
 
   public int getNumCore() {
     return numCore;
@@ -75,6 +71,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void initalizeBolt(){
+    initialized = true;
     System.out.println("initializedddds");
   }
 

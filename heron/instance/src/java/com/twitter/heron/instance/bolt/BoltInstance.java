@@ -269,6 +269,7 @@ public class BoltInstance implements IInstance {
             // record the end of a tuple execution
             long endExecuteTuple = System.nanoTime();
 
+            // not really being used at the moment
             long executeLatency = endExecuteTuple - startExecuteTuple;
 
             // Invoke user-defined execute task hook
@@ -278,7 +279,7 @@ public class BoltInstance implements IInstance {
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
 
-          ((IElasticBolt) bolt).execute();
+          ((IElasticBolt) bolt).runBolt(); // execution to be done automatically at bolt level
 
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {

@@ -29,9 +29,11 @@ public interface IElasticBolt extends IRichBolt {
 
   int getNumCore();
 
-  void execute();
+  void execute(Tuple tuple);
 
-  void loadTuples(Tuple tupleQueue);
+  void loadTuples(Tuple tupleToQueue);
+
+  void runBolt();
 
   void initalizeBolt();
 
