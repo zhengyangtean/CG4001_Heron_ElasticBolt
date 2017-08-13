@@ -38,7 +38,7 @@ public class BoltDeclarer extends BaseComponentDeclarer<BoltDeclarer> {
     bolt.declareOutputFields(output);
   }
 
-  public BoltDeclarer(String name, IElasticBolt bolt, Number taskParallelism) {
+  public BoltDeclarer(String name, IElasticBolt bolt, Number taskParallelism, Number numThreads) {
     super(name, bolt, taskParallelism);
     inputs = new LinkedList<TopologyAPI.InputStream.Builder>();
     output = new OutputFieldsGetter();

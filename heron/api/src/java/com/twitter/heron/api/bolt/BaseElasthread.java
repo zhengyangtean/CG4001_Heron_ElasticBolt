@@ -13,6 +13,10 @@
 //  limitations under the License.
 package com.twitter.heron.api.bolt;
 
+import java.util.LinkedList;
+
+import com.twitter.heron.api.tuple.Tuple;
+
 /**
  * Created by zhengyang on 8/8/17.
  */
@@ -24,11 +28,20 @@ public class BaseElasthread implements IElasthread {
   BaseElasthread(String name, IElasticBolt parentBolt){
     this.threadName = name;
     this.parentBolt = parentBolt;
-    System.out.println(this.threadName);
   }
 
   public void run(){
-
+    try {
+      LinkedList<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
+      while (!q.isEmpty()) {
+        System.out.println(threadName);
+        parentBolt.execute(q.pop());
+      }
+      t = null;
+    } catch (Exception e){
+      System.out.println("run error");
+      System.out.println(e);
+    }
   }
 
   public void start(){

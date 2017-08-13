@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 
 import com.google.protobuf.Message;
@@ -166,6 +167,10 @@ public class BoltInstance implements IInstance {
     // Invoke user-defined prepare task hook
     topologyContext.invokeHookPrepare();
 
+    if (bolt instanceof IElasticBolt) {
+      ((IElasticBolt) bolt).initElasticBolt();
+    }
+
     // Init the CustomStreamGrouping
     helper.prepareForCustomStreamGrouping();
 
@@ -199,14 +204,30 @@ public class BoltInstance implements IInstance {
       public void run() {
         // Back-pressure -- only when we could send out tuples will we read & execute tuples
         if (collector.isOutQueuesAvailable()) {
-          readTuplesAndExecute(streamInQueue);
+          try {
+            readTuplesAndExecute(streamInQueue);
+          } catch (Exception e){
+            System.out.println("readTupleAndExecuteError");
+            System.out.println(e);
+          }
 
           // Though we may execute MAX_READ tuples, finally we will packet it as
           // one outgoingPacket and push to out queues
-          collector.sendOutTuples();
+          try {
+            collector.sendOutTuples();
+          } catch (Exception e) {
+            System.out.println("sendOutTuplesError");
+            System.out.println(e);
+          }
           // Here we need to inform the Gateway
         } else {
-          boltMetrics.updateOutQueueFullCount();
+          try {
+            boltMetrics.updateOutQueueFullCount();
+          } catch (Exception e) {
+            System.out.println("updateOutQueueFullCount");
+            System.out.println(e);
+          }
+
         }
 
         // If there are more to read, we will wake up itself next time when it doWait()

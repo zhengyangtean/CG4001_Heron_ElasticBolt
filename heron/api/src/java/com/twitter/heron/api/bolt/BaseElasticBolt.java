@@ -14,7 +14,9 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
@@ -26,7 +28,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private static final long serialVersionUID = 4309732999277305080L;
   private int numCore = -1;
   private boolean initialized = false;
-  private LinkedList<Tuple> tupleQueue;
+  private ArrayList<LinkedList<Tuple>> queueArray;
+  private ConcurrentHashMap<String, Integer> stateMap;
+  private ArrayList<BaseElasthread> threadArray;
 
   public void test() {
     System.out.println("Num Cores: " + numCore);
@@ -40,12 +44,41 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
-  public final void runBolt(){
+  public void initElasticBolt(){
     if (!initialized){
-      initalizeBolt();
+      initialized = true;
     }
-    while (!tupleQueue.isEmpty()){
-      execute(tupleQueue.poll());
+//    numCore = 3 ; // temporarily set to 2 for testing purpose
+    queueArray = new ArrayList<>();
+    stateMap = new ConcurrentHashMap<>();
+    for (int i = 0; i < numCore; i++) {
+      queueArray.add(new LinkedList<>());
+    }
+    threadArray = new ArrayList<>();
+
+    for (int i = 0; i < numCore; i++){
+      threadArray.add(new BaseElasthread( String.valueOf(i), this));
+    }
+  }
+
+  public LinkedList<Tuple> getQueue(int i){
+    return queueArray.get(i);
+  }
+
+  public final void runBolt(){
+    try {
+      for (int i = 0; i < numCore; i++) {
+        if (!getQueue(i).isEmpty()) {
+          if (threadArray.get(i) == null) {
+            threadArray.add(new BaseElasthread(String.valueOf(i), this));
+          }
+          threadArray.get(i).start();
+        }
+      }
+      printStateMap();
+    } catch (Exception e){
+      System.out.println("runBoltError");
+      System.out.println(e);
     }
   }
 
@@ -58,23 +91,30 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void loadTuples(Tuple t){
-    if (tupleQueue == null){
-      tupleQueue = new LinkedList<>();
-    }
     try {
-      System.out.println(tupleQueue.size());
-      tupleQueue.add(t);
+      queueArray.get(Math.abs(t.hashCode())%this.numCore).add(t);
+      System.out.println(Math.abs(t.hashCode())%this.numCore);
     } catch (Exception e) {
-      System.out.println("ErrorLoadingElasticTuples");
+      System.out.println("loadingError");
+      System.out.println(e);
     }
-
   }
 
-  public void initalizeBolt(){
-    initialized = true;
-    System.out.println("initializedddds");
+  public synchronized void updateState(String tuple, Integer number) {
+    try {
+      if (stateMap.get(tuple) == null) {
+        stateMap.put(tuple, number);
+      } else {
+        int amount = stateMap.get(tuple);
+        stateMap.put(tuple, amount + number);
+      }
+    } catch (Exception e){
+      System.out.println("updateStateError");
+      System.out.println(e);
+    }
   }
 
-
-
+  public void printStateMap(){
+    System.out.println(Collections.singletonList(stateMap));
+  }
 }

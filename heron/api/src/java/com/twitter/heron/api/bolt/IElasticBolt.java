@@ -15,6 +15,7 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 import com.twitter.heron.api.tuple.Tuple;
 
@@ -35,6 +36,12 @@ public interface IElasticBolt extends IRichBolt {
 
   void runBolt();
 
-  void initalizeBolt();
+  void initElasticBolt();
+
+  void updateState(String tuple, Integer number);
+
+  void printStateMap();
+
+  LinkedList<Tuple> getQueue(int i);
 
 }

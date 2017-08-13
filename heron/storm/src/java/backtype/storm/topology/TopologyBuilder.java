@@ -22,6 +22,7 @@ package backtype.storm.topology;
 // import backtype.storm.grouping.CustomStreamGrouping;
 
 import com.twitter.heron.api.HeronTopology;
+import com.twitter.heron.api.bolt.IElasticBolt;
 
 import backtype.storm.generated.StormTopology;
 
@@ -51,6 +52,10 @@ public class TopologyBuilder {
 
   public BoltDeclarer setBolt(String id, IBasicBolt bolt, Number parallelismHint) {
     return setBolt(id, new BasicBoltExecutor(bolt), parallelismHint);
+  }
+
+  public BoltDeclarer setBolt(String id, IElasticBolt bolt, Number parallelismHint, Number numThread) {
+    return setBolt(id, bolt, parallelismHint, numThread);
   }
 
   public SpoutDeclarer setSpout(String id, IRichSpout spout) {
