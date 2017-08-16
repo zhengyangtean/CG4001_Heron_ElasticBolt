@@ -36,12 +36,14 @@ public interface IElasticBolt extends IRichBolt {
 
   void runBolt();
 
-  void initElasticBolt();
+  void initElasticBolt(OutputCollector collector);
 
   void updateState(String tuple, Integer number);
 
   void printStateMap();
 
   LinkedList<Tuple> getQueue(int i);
+
+  void loadOutputTuples(Tuple t, String s);
 
 }

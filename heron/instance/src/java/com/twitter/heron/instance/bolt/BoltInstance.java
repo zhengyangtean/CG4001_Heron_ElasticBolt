@@ -160,15 +160,24 @@ public class BoltInstance implements IInstance {
       ((IStatefulComponent<Serializable, Serializable>) bolt).initState(instanceState);
     }
 
-    // Delegate
-    bolt.prepare(
-        topologyContext.getTopologyConfig(), topologyContext, new OutputCollector(collector));
-
-    // Invoke user-defined prepare task hook
-    topologyContext.invokeHookPrepare();
-
     if (bolt instanceof IElasticBolt) {
-      ((IElasticBolt) bolt).initElasticBolt();
+      // Delegate
+      OutputCollector boltCollector = new OutputCollector(collector);
+
+      bolt.prepare(
+          topologyContext.getTopologyConfig(), topologyContext, boltCollector);
+
+      // Invoke user-defined prepare task hook
+      topologyContext.invokeHookPrepare();
+
+      ((IElasticBolt) bolt).initElasticBolt(boltCollector);
+    } else {
+      // Delegate
+      bolt.prepare(
+          topologyContext.getTopologyConfig(), topologyContext, new OutputCollector(collector));
+
+      // Invoke user-defined prepare task hook
+      topologyContext.invokeHookPrepare();
     }
 
     // Init the CustomStreamGrouping
@@ -204,30 +213,15 @@ public class BoltInstance implements IInstance {
       public void run() {
         // Back-pressure -- only when we could send out tuples will we read & execute tuples
         if (collector.isOutQueuesAvailable()) {
-          try {
-            readTuplesAndExecute(streamInQueue);
-          } catch (Exception e){
-            System.out.println("readTupleAndExecuteError");
-            System.out.println(e);
-          }
-
+          readTuplesAndExecute(streamInQueue);
           // Though we may execute MAX_READ tuples, finally we will packet it as
           // one outgoingPacket and push to out queues
-          try {
-            collector.sendOutTuples();
-          } catch (Exception e) {
-            System.out.println("sendOutTuplesError");
-            System.out.println(e);
-          }
+          collector.sendOutTuples();
           // Here we need to inform the Gateway
+          System.out.println("outqueue ok!");
         } else {
-          try {
-            boltMetrics.updateOutQueueFullCount();
-          } catch (Exception e) {
-            System.out.println("updateOutQueueFullCount");
-            System.out.println(e);
-          }
-
+          System.out.println("outqueue not availble");
+          boltMetrics.updateOutQueueFullCount();
         }
 
         // If there are more to read, we will wake up itself next time when it doWait()

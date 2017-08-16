@@ -17,9 +17,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
+import com.twitter.heron.api.tuple.Values;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -31,6 +33,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private ArrayList<LinkedList<Tuple>> queueArray;
   private ConcurrentHashMap<String, Integer> stateMap;
   private ArrayList<BaseElasthread> threadArray;
+  private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
+  private OutputCollector collector;
 
   public void test() {
     System.out.println("Num Cores: " + numCore);
@@ -44,7 +48,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
-  public void initElasticBolt(){
+  public void initElasticBolt(OutputCollector acollector){
     if (!initialized){
       initialized = true;
     }
@@ -59,6 +63,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     for (int i = 0; i < numCore; i++){
       threadArray.add(new BaseElasthread( String.valueOf(i), this));
     }
+    collector = acollector;
+    collectorQueue = new ConcurrentLinkedQueue<>();
   }
 
   public LinkedList<Tuple> getQueue(int i){
@@ -66,6 +72,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public final void runBolt(){
+    System.out.println("RUNNINGBOLT!!!");
     try {
       for (int i = 0; i < numCore; i++) {
         if (!getQueue(i).isEmpty()) {
@@ -76,6 +83,10 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         }
       }
       printStateMap();
+      while (!collectorQueue.isEmpty()){
+        BaseCollectorTuple next = collectorQueue.poll();
+        collector.emit(next.getT(), new Values(next.getS()));
+      }
     } catch (Exception e){
       System.out.println("runBoltError");
       System.out.println(e);
@@ -93,12 +104,17 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void loadTuples(Tuple t){
     try {
       queueArray.get(Math.abs(t.hashCode())%this.numCore).add(t);
-      System.out.println(Math.abs(t.hashCode())%this.numCore);
     } catch (Exception e) {
       System.out.println("loadingError");
       System.out.println(e);
     }
   }
+
+  public void loadOutputTuples(Tuple t, String s){
+    BaseCollectorTuple output = new BaseCollectorTuple(t,s);
+    collectorQueue.add(output);
+  }
+
 
   public synchronized void updateState(String tuple, Integer number) {
     try {
