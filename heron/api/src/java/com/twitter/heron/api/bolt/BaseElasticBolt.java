@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
+import com.twitter.heron.api.utils.Utils;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -91,6 +92,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       System.out.println("runBoltError");
       System.out.println(e);
     }
+
+    Utils.sleep(5000);
   }
 
   public int getNumCore() {
