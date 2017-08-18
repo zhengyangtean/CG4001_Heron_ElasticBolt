@@ -217,9 +217,7 @@ public class BoltInstance implements IInstance {
           // one outgoingPacket and push to out queues
           collector.sendOutTuples();
           // Here we need to inform the Gateway
-          System.out.println("outqueue ok!");
         } else {
-          System.out.println("outqueue not availble");
           boltMetrics.updateOutQueueFullCount();
         }
 
@@ -241,6 +239,11 @@ public class BoltInstance implements IInstance {
 
     long startOfCycle = System.nanoTime();
     // Read data from in Queues
+
+    if (bolt instanceof IElasticBolt && inQueue.isEmpty()){
+      ((IElasticBolt) bolt).checkQueue(); // Check to see if there are any remaining tuples to send
+    }
+
     while (!inQueue.isEmpty()) {
       Message msg = inQueue.poll();
 

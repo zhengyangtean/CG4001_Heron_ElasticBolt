@@ -47,4 +47,6 @@ public interface IElasticBolt extends IRichBolt {
 
   void decrementLock();
 
+  void checkQueue();
+
 }

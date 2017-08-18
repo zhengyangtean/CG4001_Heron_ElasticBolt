@@ -33,7 +33,6 @@ public class BaseElasthread implements IElasthread {
   public void run() {
     LinkedList<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
     while (!q.isEmpty()) {
-      System.out.println(threadName);
       parentBolt.execute(q.pop());
     }
     t = null;

@@ -76,8 +76,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public final void runBolt() {
-    System.out.println("RUNNINGBOLT!!!");
-
     for (int i = 0; i < numCore; i++) {
       if (!getQueue(i).isEmpty()) {
         if (threadArray.get(i) == null) {
@@ -87,7 +85,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         lock.getAndIncrement();
       }
     }
-    printStateMap();
+//    printStateMap();
     while (!collectorQueue.isEmpty()) {
       BaseCollectorTuple next = collectorQueue.poll();
       collector.emit(next.getT(), new Values(next.getS()));
@@ -96,6 +94,13 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     // waits for threads to join
     while (lock.get() > 0) {
       continue;
+    }
+  }
+
+  public void checkQueue(){
+    while (!collectorQueue.isEmpty()) {
+      BaseCollectorTuple next = collectorQueue.poll();
+      collector.emit(next.getT(), new Values(next.getS()));
     }
   }
 
@@ -115,7 +120,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     queueArray.get(Math.abs(t.hashCode()) % this.numCore).add(t);
   }
 
-  public void loadOutputTuples(Tuple t, String s) {
+  public synchronized void loadOutputTuples(Tuple t, String s) {
     BaseCollectorTuple output = new BaseCollectorTuple(t, s);
     collectorQueue.add(output);
   }
