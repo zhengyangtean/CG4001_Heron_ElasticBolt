@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
-import com.twitter.heron.api.utils.Utils;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -52,8 +51,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
-  public void initElasticBolt(OutputCollector acollector){
-    if (!initialized){
+  public void initElasticBolt(OutputCollector acollector) {
+    if (!initialized) {
       initialized = true;
     }
 //    numCore = 3 ; // temporarily set to 2 for testing purpose
@@ -64,45 +63,43 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
     threadArray = new ArrayList<>();
 
-    for (int i = 0; i < numCore; i++){
-      threadArray.add(new BaseElasthread( String.valueOf(i), this));
+    for (int i = 0; i < numCore; i++) {
+      threadArray.add(new BaseElasthread(String.valueOf(i), this));
     }
     collector = acollector;
     collectorQueue = new ConcurrentLinkedQueue<>();
     lock = new AtomicInteger(0);
   }
 
-  public LinkedList<Tuple> getQueue(int i){
+  public LinkedList<Tuple> getQueue(int i) {
     return queueArray.get(i);
   }
 
-  public final void runBolt(){
+  public final void runBolt() {
     System.out.println("RUNNINGBOLT!!!");
-    try {
-      for (int i = 0; i < numCore; i++) {
-        if (!getQueue(i).isEmpty()) {
-          if (threadArray.get(i) == null) {
-            threadArray.add(new BaseElasthread(String.valueOf(i), this));
-          }
-          threadArray.get(i).start();
-          lock.getAndIncrement();
+
+    for (int i = 0; i < numCore; i++) {
+      if (!getQueue(i).isEmpty()) {
+        if (threadArray.get(i) == null) {
+          threadArray.add(new BaseElasthread(String.valueOf(i), this));
         }
+        threadArray.get(i).start();
+        lock.getAndIncrement();
       }
-      printStateMap();
-      while (!collectorQueue.isEmpty()){
-        BaseCollectorTuple next = collectorQueue.poll();
-        collector.emit(next.getT(), new Values(next.getS()));
-      }
-    } catch (Exception e){
-      System.out.println("runBoltError");
-      System.out.println(e);
     }
+    printStateMap();
+    while (!collectorQueue.isEmpty()) {
+      BaseCollectorTuple next = collectorQueue.poll();
+      collector.emit(next.getT(), new Values(next.getS()));
+    }
+
     // waits for threads to join
-    while (lock.get() > 0){
+    while (lock.get() > 0) {
+      continue;
     }
   }
 
-  public void decrementLock(){
+  public void decrementLock() {
     lock.getAndDecrement();
   }
 
@@ -110,40 +107,29 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     return numCore;
   }
 
-  public void setNumCore(int numCore){
+  public void setNumCore(int numCore) {
     this.numCore = numCore;
   }
 
-  public void loadTuples(Tuple t){
-    try {
-      queueArray.get(Math.abs(t.hashCode())%this.numCore).add(t);
-    } catch (Exception e) {
-      System.out.println("loadingError");
-      System.out.println(e);
-    }
+  public void loadTuples(Tuple t) {
+    queueArray.get(Math.abs(t.hashCode()) % this.numCore).add(t);
   }
 
-  public void loadOutputTuples(Tuple t, String s){
-    BaseCollectorTuple output = new BaseCollectorTuple(t,s);
+  public void loadOutputTuples(Tuple t, String s) {
+    BaseCollectorTuple output = new BaseCollectorTuple(t, s);
     collectorQueue.add(output);
   }
 
-
   public synchronized void updateState(String tuple, Integer number) {
-    try {
-      if (stateMap.get(tuple) == null) {
-        stateMap.put(tuple, number);
-      } else {
-        int amount = stateMap.get(tuple);
-        stateMap.put(tuple, amount + number);
-      }
-    } catch (Exception e){
-      System.out.println("updateStateError");
-      System.out.println(e);
+    if (stateMap.get(tuple) == null) {
+      stateMap.put(tuple, number);
+    } else {
+      int amount = stateMap.get(tuple);
+      stateMap.put(tuple, amount + number);
     }
   }
 
-  public void printStateMap(){
+  public void printStateMap() {
     System.out.println(Collections.singletonList(stateMap));
   }
 }

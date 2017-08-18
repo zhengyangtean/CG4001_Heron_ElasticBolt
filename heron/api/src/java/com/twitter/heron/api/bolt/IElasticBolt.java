@@ -14,7 +14,6 @@
 
 package com.twitter.heron.api.bolt;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
 
 import com.twitter.heron.api.tuple.Tuple;

@@ -27,11 +27,11 @@ public class BaseCollectorTuple {
     this.s = s;
   }
 
-  public Tuple getT(){
+  public Tuple getT() {
     return t;
   }
 
-  public String getS(){
+  public String getS() {
     return s;
   }
 }

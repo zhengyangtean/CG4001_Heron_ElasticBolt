@@ -25,30 +25,25 @@ public class BaseElasthread implements IElasthread {
   private String threadName;
   private final IElasticBolt parentBolt;
 
-  BaseElasthread(String name, IElasticBolt parentBolt){
+  BaseElasthread(String name, IElasticBolt parentBolt) {
     this.threadName = name;
     this.parentBolt = parentBolt;
   }
 
-  public void run(){
-    try {
-      LinkedList<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
-      while (!q.isEmpty()) {
-        System.out.println(threadName);
-        parentBolt.execute(q.pop());
-      }
-      t = null;
-      parentBolt.decrementLock();
-    } catch (Exception e){
-      System.out.println("run error");
-      System.out.println(e);
+  public void run() {
+    LinkedList<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
+    while (!q.isEmpty()) {
+      System.out.println(threadName);
+      parentBolt.execute(q.pop());
     }
+    t = null;
+    parentBolt.decrementLock();
   }
 
-  public void start(){
+  public void start() {
     if (t == null) {
-      t = new Thread (this, threadName);
-      t.start ();
+      t = new Thread(this, threadName);
+      t.start();
     }
   }
 }

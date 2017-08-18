@@ -54,8 +54,8 @@ public class TopologyBuilder {
     return setBolt(id, new BasicBoltExecutor(bolt), parallelismHint);
   }
 
-  public BoltDeclarer setBolt(String id, IElasticBolt bolt, Number parallelismHint, Number numThread) {
-    return setBolt(id, bolt, parallelismHint, numThread);
+  public BoltDeclarer setBolt(String id, IElasticBolt bolt, Number parallelismHint, Number numtds) {
+    return setBolt(id, bolt, parallelismHint, numtds);
   }
 
   public SpoutDeclarer setSpout(String id, IRichSpout spout) {
