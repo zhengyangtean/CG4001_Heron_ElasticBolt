@@ -38,6 +38,7 @@ public class BaseElasthread implements IElasthread {
         parentBolt.execute(q.pop());
       }
       t = null;
+      parentBolt.decrementLock();
     } catch (Exception e){
       System.out.println("run error");
       System.out.println(e);

@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
@@ -36,6 +37,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private ArrayList<BaseElasthread> threadArray;
   private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
   private OutputCollector collector;
+  private AtomicInteger lock;
+
 
   public void test() {
     System.out.println("Num Cores: " + numCore);
@@ -66,6 +69,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
     collector = acollector;
     collectorQueue = new ConcurrentLinkedQueue<>();
+    lock = new AtomicInteger(0);
   }
 
   public LinkedList<Tuple> getQueue(int i){
@@ -81,6 +85,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
             threadArray.add(new BaseElasthread(String.valueOf(i), this));
           }
           threadArray.get(i).start();
+          lock.getAndIncrement();
         }
       }
       printStateMap();
@@ -92,8 +97,13 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       System.out.println("runBoltError");
       System.out.println(e);
     }
+    // waits for threads to join
+    while (lock.get() > 0){
+    }
+  }
 
-    Utils.sleep(5000);
+  public void decrementLock(){
+    lock.getAndDecrement();
   }
 
   public int getNumCore() {

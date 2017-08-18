@@ -46,4 +46,6 @@ public interface IElasticBolt extends IRichBolt {
 
   void loadOutputTuples(Tuple t, String s);
 
+  void decrementLock();
+
 }
