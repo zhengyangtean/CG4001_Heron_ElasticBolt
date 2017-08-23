@@ -126,7 +126,8 @@ public class TopologyBuilder {
    *
    * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
    * @param bolt the bolt
-   * @param desiredParallelism the number of core that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
+   * @param desiredParallelism the number of tasks that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
+   * @param numtds the number of thread each bolt should have
    * @return use the returned object to declare the inputs to this component
    */
   public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism, int numtds) {

@@ -26,22 +26,24 @@ import com.twitter.heron.api.tuple.Values;
 
 /**
  * Created by zhengyang on 25/6/17.
+ * Assumptions made is that the key for the state are strings and the values and integers
  */
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
   private int numCore = -1;
-  private boolean initialized = false;
+  // Serves as the map of queue of incoming work for the various threads
   private ArrayList<LinkedList<Tuple>> queueArray;
+  // Serve as the inmemorystate of this instance of the ElasticBolt
   private ConcurrentHashMap<String, Integer> stateMap;
+  // Keeps track of the threads in this ElasticBolt
   private ArrayList<BaseElasthread> threadArray;
+  // As the collector is not threadsafe, this concurrent queue is
+  // meant to join all the tuple outputs from various threads into a single threaded queue for the
+  // queue to process
   private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
   private OutputCollector collector;
+  // this is used to synchronize/join all the threads in one iteration of processing
   private AtomicInteger lock;
-
-
-  public void test() {
-    System.out.println("Num Cores: " + numCore);
-  }
 
   @Override
   public void cleanup() {
@@ -51,11 +53,16 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
+  /**
+   * Initialize the Elasticbolt with the required data structures and threads
+   * based on the topology
+   *
+   * The acollector is the OutputCollector used by this bolt to emit tuples
+   * downstream
+   *
+   * @param acollector
+   */
   public void initElasticBolt(OutputCollector acollector) {
-    if (!initialized) {
-      initialized = true;
-    }
-//    numCore = 3 ; // temporarily set to 2 for testing purpose
     queueArray = new ArrayList<>();
     stateMap = new ConcurrentHashMap<>();
     for (int i = 0; i < numCore; i++) {
@@ -77,27 +84,31 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   public final void runBolt() {
     for (int i = 0; i < numCore; i++) {
+      // for each of the "core" assigned which is represented by a thread, we check its queue to
+      // see if it is empty, if its not empty, we create a new thread and run it
       if (!getQueue(i).isEmpty()) {
         if (threadArray.get(i) == null) {
           threadArray.add(new BaseElasthread(String.valueOf(i), this));
         }
         threadArray.get(i).start();
+        // update the number of threads running at the moment
         lock.getAndIncrement();
       }
     }
-//    printStateMap();
+    // printStateMap();
     while (!collectorQueue.isEmpty()) {
       BaseCollectorTuple next = collectorQueue.poll();
       collector.emit(next.getT(), new Values(next.getS()));
     }
 
-    // waits for threads to join
+    // waits for threads finish their jobs and to "join"
     while (lock.get() > 0) {
       continue;
     }
   }
 
-  public void checkQueue(){
+  // emit tuples if the output queue is not empty
+  public void checkQueue() {
     while (!collectorQueue.isEmpty()) {
       BaseCollectorTuple next = collectorQueue.poll();
       collector.emit(next.getT(), new Values(next.getS()));
@@ -120,10 +131,12 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     queueArray.get(Math.abs(t.hashCode()) % this.numCore).add(t);
   }
 
+  // used by the various threads converge and load into the output queue
   public synchronized void loadOutputTuples(Tuple t, String s) {
     BaseCollectorTuple output = new BaseCollectorTuple(t, s);
     collectorQueue.add(output);
   }
+
 
   public synchronized void updateState(String tuple, Integer number) {
     if (stateMap.get(tuple) == null) {

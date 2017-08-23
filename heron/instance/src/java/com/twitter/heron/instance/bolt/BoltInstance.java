@@ -169,6 +169,7 @@ public class BoltInstance implements IInstance {
       // Invoke user-defined prepare task hook
       topologyContext.invokeHookPrepare();
 
+      // Pass collector into elasticbolt incase the topology requires the bolt to  emit tuples
       ((IElasticBolt) bolt).initElasticBolt(boltCollector);
     } else {
       // Delegate
@@ -240,7 +241,7 @@ public class BoltInstance implements IInstance {
     long startOfCycle = System.nanoTime();
     // Read data from in Queues
 
-    if (bolt instanceof IElasticBolt && inQueue.isEmpty()){
+    if (bolt instanceof IElasticBolt && inQueue.isEmpty()) {
       ((IElasticBolt) bolt).checkQueue(); // Check to see if there are any remaining tuples to send
     }
 
