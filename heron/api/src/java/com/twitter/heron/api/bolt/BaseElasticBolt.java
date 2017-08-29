@@ -44,6 +44,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private OutputCollector collector;
   // this is used to synchronize/join all the threads in one iteration of processing
   private AtomicInteger lock;
+  private long latency = System.currentTimeMillis();
 
   @Override
   public void cleanup() {
@@ -113,6 +114,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       BaseCollectorTuple next = collectorQueue.poll();
       collector.emit(next.getT(), new Values(next.getS()));
     }
+    // debug to print state if last check is > 30 second
+    if (System.currentTimeMillis()-latency> 30000){
+      printStateMap();
+    }
+    latency= System.currentTimeMillis();
   }
 
   public void decrementLock() {
