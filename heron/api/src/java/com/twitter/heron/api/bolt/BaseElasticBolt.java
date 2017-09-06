@@ -114,11 +114,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       BaseCollectorTuple next = collectorQueue.poll();
       collector.emit(next.getT(), new Values(next.getS()));
     }
-    // debug to print state if last check is > 30 second
-    if (System.currentTimeMillis()-latency> 30000){
+    // debug to print state if last check is > 15 second
+    if (System.currentTimeMillis() - latency > 15000) {
       printStateMap();
     }
-    latency= System.currentTimeMillis();
+    latency = System.currentTimeMillis();
   }
 
   public void decrementLock() {
@@ -134,7 +134,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void loadTuples(Tuple t) {
-    queueArray.get(Math.abs(t.hashCode()) % this.numCore).add(t);
+    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
   }
 
   // used by the various threads converge and load into the output queue
