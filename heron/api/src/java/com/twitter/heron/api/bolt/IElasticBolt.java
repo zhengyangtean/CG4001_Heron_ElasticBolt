@@ -50,4 +50,6 @@ public interface IElasticBolt extends IRichBolt {
 
   void checkQueue();
 
+  void updateLoadBalancer(String key);
+
 }

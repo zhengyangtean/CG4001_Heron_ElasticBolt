@@ -15,6 +15,7 @@ package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -45,6 +46,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // this is used to synchronize/join all the threads in one iteration of processing
   private AtomicInteger lock;
   private long latency = System.currentTimeMillis();
+  private HashMap<String, AtomicInteger> keyCountMap;
+  private HashMap<String, Integer> keyThreadMap;
+  private LinkedList<Integer> nextFreeQueue;
 
   @Override
   public void cleanup() {
@@ -77,6 +81,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     collector = acollector;
     collectorQueue = new ConcurrentLinkedQueue<>();
     lock = new AtomicInteger(0);
+    keyCountMap = new HashMap<>();
+    keyThreadMap = new HashMap<>();
+    // point first free thread to be 0
+    nextFreeQueue = new LinkedList<>();
+    nextFreeQueue.push(0);
   }
 
   public LinkedList<Tuple> getQueue(int i) {
@@ -134,7 +143,21 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void loadTuples(Tuple t) {
-    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
+    String key = t.getString(0);
+    if (keyThreadMap.get(key) != null){ // check if key is already being processed
+      queueArray.get(keyThreadMap.get(key)).add(t);
+      keyCountMap.get(key).incrementAndGet();
+    } else { //if not, just assign it to the next freeThread, if there is no free thread, just next
+      int nextFree = nextFreeQueue.pop();
+      queueArray.get(nextFree).add(t);
+      keyThreadMap.put(key, nextFree);
+      keyCountMap.put(key, new AtomicInteger(1));
+      if (nextFreeQueue.isEmpty()){
+        nextFreeQueue.push((nextFree+1)%this.numCore);
+      }
+    }
+    // simplistic hashcode allocation (outdated)
+//    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
   }
 
   // used by the various threads converge and load into the output queue
@@ -150,6 +173,20 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     } else {
       int amount = stateMap.get(tuple);
       stateMap.put(tuple, amount + number);
+    }
+  }
+
+  public synchronized void updateLoadBalancer(String key){
+    int numLeft = keyCountMap.get(key).decrementAndGet();
+    // check the number of task left for this key
+    if (numLeft <= 0){
+      // if no more left, remove key and update hashmaps and nextFreeThread
+      // avoiding priority queue for now to prevent extra calculation which might not help that much
+      nextFreeQueue.push(keyThreadMap.get(key));
+
+
+      keyCountMap.remove(key);
+      keyThreadMap.remove(key);
     }
   }
 

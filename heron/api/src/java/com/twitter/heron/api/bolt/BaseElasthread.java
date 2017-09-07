@@ -36,6 +36,7 @@ public class BaseElasthread implements IElasthread {
       Tuple nextTuple = q.pop();
       parentBolt.execute(nextTuple);
       parentBolt.updateState(threadName + " :: " + nextTuple.getString(0), 1);
+      parentBolt.updateLoadBalancer(nextTuple.getString(0));
     }
     t = null;
 
