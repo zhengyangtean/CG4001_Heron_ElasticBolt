@@ -32,6 +32,7 @@ import com.twitter.heron.api.tuple.Values;
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
   private int numCore = -1;
+  private int maxCore = -1;
   // Serves as the map of queue of incoming work for the various threads
   private ArrayList<LinkedList<Tuple>> queueArray;
   // Serve as the inmemorystate of this instance of the ElasticBolt
@@ -93,13 +94,16 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public final void runBolt() {
+    System.out.println("HELLO::RUNNING BOLT");
     for (int i = 0; i < numCore; i++) {
       // for each of the "core" assigned which is represented by a thread, we check its queue to
       // see if it is empty, if its not empty, we create a new thread and run it
       if (!getQueue(i).isEmpty()) {
         if (threadArray.get(i) == null) {
+          System.out.println("HELLO::ADDING_"+i);
           threadArray.add(new BaseElasthread(String.valueOf(i), this));
         }
+        System.out.println("HELLO::STARTING_"+i);
         threadArray.get(i).start();
         // update the number of threads running at the moment
         lock.getAndIncrement();
@@ -140,6 +144,14 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   public void setNumCore(int numCore) {
     this.numCore = numCore;
+  }
+
+  public void setMaxCore(int maxCore) {
+      this.maxCore = maxCore;
+  }
+
+  public int getMaxCore() {
+    return maxCore;
   }
 
   public void loadTuples(Tuple t) {
@@ -184,9 +196,19 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       // avoiding priority queue for now to prevent extra calculation which might not help that much
       nextFreeQueue.push(keyThreadMap.get(key));
 
-
       keyCountMap.remove(key);
       keyThreadMap.remove(key);
+    }
+  }
+
+  public void scaleUp(int cores){
+    numCore += cores;
+  }
+
+  public void scaleDown(int cores){
+    numCore -= cores;
+    if (numCore <= 0){
+      numCore = 1;
     }
   }
 

@@ -28,7 +28,11 @@ public interface IElasticBolt extends IRichBolt {
   // for users to set maximum number of core/threads used
   void setNumCore(int numCore);
 
+  void setMaxCore(int maxCore);
+
   int getNumCore();
+
+  int getMaxCore();
 
   void execute(Tuple tuple);
 
@@ -51,5 +55,9 @@ public interface IElasticBolt extends IRichBolt {
   void checkQueue();
 
   void updateLoadBalancer(String key);
+
+  void scaleUp(int cores);
+
+  void scaleDown(int cores);
 
 }

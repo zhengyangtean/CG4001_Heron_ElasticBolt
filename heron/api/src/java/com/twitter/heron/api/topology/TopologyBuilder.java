@@ -140,6 +140,7 @@ public class TopologyBuilder {
     if (desiredParallelism * numtds > cores) {
       realNumThread = Math.min(cores / desiredParallelism, 1);
     }
+    bolt.setMaxCore(cores);
     bolt.setNumCore(realNumThread);
 
     BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
