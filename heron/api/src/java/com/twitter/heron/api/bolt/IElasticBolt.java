@@ -17,6 +17,7 @@ package com.twitter.heron.api.bolt;
 import java.util.LinkedList;
 
 import com.twitter.heron.api.tuple.Tuple;
+import com.twitter.heron.api.tuple.Values;
 
 /**
  * When writing topologies using Java, {@link IRichBolt} and
@@ -48,7 +49,7 @@ public interface IElasticBolt extends IRichBolt {
 
   LinkedList<Tuple> getQueue(int i);
 
-  void loadOutputTuples(Tuple t, String s);
+  void loadOutputTuples(Tuple t, Values v);
 
   void decrementLock();
 
@@ -59,5 +60,9 @@ public interface IElasticBolt extends IRichBolt {
   void scaleUp(int cores);
 
   void scaleDown(int cores);
+
+  void setDebug(Boolean debug);
+
+  boolean getFreezeStatus();
 
 }

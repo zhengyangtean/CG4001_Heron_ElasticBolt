@@ -241,8 +241,9 @@ public class BoltInstance implements IInstance {
     long startOfCycle = System.nanoTime();
     // Read data from in Queues
 
-    if (bolt instanceof IElasticBolt && inQueue.isEmpty()) {
-      ((IElasticBolt) bolt).checkQueue(); // Check to see if there are any remaining tuples to send
+    // check to see if they is any outstanding tuples yet to be sent out
+    if (bolt instanceof IElasticBolt){
+      ((IElasticBolt) bolt).checkQueue();
     }
 
     while (!inQueue.isEmpty()) {

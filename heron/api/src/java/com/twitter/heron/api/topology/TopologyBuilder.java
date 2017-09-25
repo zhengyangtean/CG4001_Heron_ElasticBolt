@@ -148,6 +148,25 @@ public class TopologyBuilder {
     return b;
   }
 
+  public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism, int numtds, boolean debug) {
+    validateComponentName(id);
+
+    int realNumThread = numtds;
+
+    // Validating number of threads to be always less than that of number of cores in java system
+    int cores = Runtime.getRuntime().availableProcessors();
+    if (desiredParallelism * numtds > cores) {
+      realNumThread = Math.min(cores / desiredParallelism, 1);
+    }
+    bolt.setMaxCore(cores);
+    bolt.setNumCore(realNumThread);
+    bolt.setDebug(debug);
+
+    BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
+    bolts.put(id, b);
+    return b;
+  }
+
   /**
    * Define a new bolt in this topology. This defines a basic bolt, which is a
    * simpler to use but more restricted kind of bolt. Basic bolts are intended

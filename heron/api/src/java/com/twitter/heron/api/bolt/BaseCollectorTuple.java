@@ -14,24 +14,25 @@
 package com.twitter.heron.api.bolt;
 
 import com.twitter.heron.api.tuple.Tuple;
+import com.twitter.heron.api.tuple.Values;
 
 /**
  * Created by zhengyang on 16/8/17.
  */
 public class BaseCollectorTuple {
   public final Tuple t;
-  public final String s;
+  public final Values v;
 
-  public BaseCollectorTuple(Tuple t, String s) {
+  public BaseCollectorTuple(Tuple t, Values v) {
     this.t = t;
-    this.s = s;
+    this.v = v;
   }
 
   public Tuple getT() {
     return t;
   }
 
-  public String getS() {
-    return s;
+  public Values getV() {
+    return v;
   }
 }

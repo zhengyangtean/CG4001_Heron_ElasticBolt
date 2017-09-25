@@ -24,114 +24,122 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
+import com.twitter.heron.api.utils.Utils;
 
 /**
  * Created by zhengyang on 25/6/17.
- * Assumptions made is that the key for the state are strings and the values and integers
+ * Assumptions made
+ * > key for the state are strings and the values and integers
+ * > Tuple have key String at index 0, ie. tuple.getString(0) returns the tuple's key
+ * > unbounded stream of incoming tuples from upstream bolt/sprout
  */
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
-  private int numCore = -1;
-  private int maxCore = -1;
-  // Serves as the map of queue of incoming work for the various threads
-  private ArrayList<LinkedList<Tuple>> queueArray;
-  // Serve as the inmemorystate of this instance of the ElasticBolt
-  private ConcurrentHashMap<String, Integer> stateMap;
-  // Keeps track of the threads in this ElasticBolt
-  private ArrayList<BaseElasthread> threadArray;
-  // As the collector is not threadsafe, this concurrent queue is
-  // meant to join all the tuple outputs from various threads into a single threaded queue for the
-  // queue to process
-  private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
+
   private OutputCollector collector;
+  private long latency = System.currentTimeMillis();
+
+  // Cores are the number of threads that are running
+  private int numCore = -1; // numCore are the number of threads currently being used
+  private int maxCore = -1; // maxCore are the number of threads the system has
+
   // this is used to synchronize/join all the threads in one iteration of processing
   private AtomicInteger lock;
-  private long latency = System.currentTimeMillis();
+
+  /**
+   * ArrayList as the external list of the number of queues are constant (added only at init)
+   * LinkedList as the internal queue due to its better add/remove performance
+   **/
+  // Serves as the the single point of entry of in-buffer for this elastibolt
+  private LinkedList<Tuple> inQueue; // LL due to its high add and remove frequency
+  // Serves as the map of queue to feed tuples into various threads
+  private ArrayList<LinkedList<Tuple>> queueArray;
+  // Keeps track of the threads in this ElasticBolt
+  private ArrayList<BaseElasthread> threadArray;
+  private ArrayList<AtomicInteger> loadArray;
+  private int wastedThreads;
+  private Boolean freeze;
+
+  /**
+   * As the collector is not threadsafe, this concurrent queue is
+   * meant to join all the tuple outputs from various threads into a single threaded queue for the
+   * queue to process
+   **/
+  private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
+  private ConcurrentHashMap<String, Integer> stateMap; // Serve as the inmemorystate
+
   private HashMap<String, AtomicInteger> keyCountMap;
   private HashMap<String, Integer> keyThreadMap;
-  private LinkedList<Integer> nextFreeQueue;
-
-  @Override
-  public void cleanup() {
-  }
-
-  @Override
-  public void execute(Tuple tuple) {
-  }
+  public boolean debug = false;
 
   /**
    * Initialize the Elasticbolt with the required data structures and threads
    * based on the topology
    *
-   * The acollector is the OutputCollector used by this bolt to emit tuples
+   * @param acollector The acollector is the OutputCollector used by this bolt to emit tuples
    * downstream
-   *
-   * @param acollector
    */
   public void initElasticBolt(OutputCollector acollector) {
-    queueArray = new ArrayList<>();
-    stateMap = new ConcurrentHashMap<>();
-    for (int i = 0; i < numCore; i++) {
-      queueArray.add(new LinkedList<>());
-    }
-    threadArray = new ArrayList<>();
-
-    for (int i = 0; i < numCore; i++) {
-      threadArray.add(new BaseElasthread(String.valueOf(i), this));
-    }
     collector = acollector;
+    queueArray = new ArrayList<>();
+    threadArray = new ArrayList<>();
+    loadArray = new ArrayList<>();
+    inQueue = new LinkedList<>();
+    stateMap = new ConcurrentHashMap<>();
     collectorQueue = new ConcurrentLinkedQueue<>();
     lock = new AtomicInteger(0);
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
-    // point first free thread to be 0
-    nextFreeQueue = new LinkedList<>();
-    nextFreeQueue.push(0);
+    wastedThreads = this.numCore;
+    freeze = false;
+    for (int i = 0; i < numCore; i++) {
+      queueArray.add(new LinkedList<>());
+      threadArray.add(new BaseElasthread(String.valueOf(i), this));
+      loadArray.add(new AtomicInteger(0));
+    }
   }
 
-  public LinkedList<Tuple> getQueue(int i) {
-    return queueArray.get(i);
-  }
-
-  public final void runBolt() {
-    System.out.println("HELLO::RUNNING BOLT");
+  public void runBolt() {
+    if (wastedThreads == this.numCore){
+      if (this.freeze = true){
+        System.out.println("::Unfreezing::");
+      }
+      this.freeze = false;
+    }
     for (int i = 0; i < numCore; i++) {
       // for each of the "core" assigned which is represented by a thread, we check its queue to
-      // see if it is empty, if its not empty, we create a new thread and run it
+      // see if it is empty, if its not empty, and thread
+      // is null we create a new thread and run it
       if (!getQueue(i).isEmpty()) {
         if (threadArray.get(i) == null) {
-          System.out.println("HELLO::ADDING_"+i);
           threadArray.add(new BaseElasthread(String.valueOf(i), this));
         }
-        System.out.println("HELLO::STARTING_"+i);
         threadArray.get(i).start();
         // update the number of threads running at the moment
         lock.getAndIncrement();
       }
     }
-    // printStateMap();
-    while (!collectorQueue.isEmpty()) {
-      BaseCollectorTuple next = collectorQueue.poll();
-      collector.emit(next.getT(), new Values(next.getS()));
-    }
-
-    // waits for threads finish their jobs and to "join"
     while (lock.get() > 0) {
-      continue;
+      Utils.sleep(1); // waits for threads finish their jobs and to "join"
     }
   }
 
   // emit tuples if the output queue is not empty
+  // done by boltinstance before runbolt
   public void checkQueue() {
     while (!collectorQueue.isEmpty()) {
       BaseCollectorTuple next = collectorQueue.poll();
-      collector.emit(next.getT(), new Values(next.getS()));
+      collector.emit(next.getT(), next.getV());
     }
     // debug to print state if last check is > 15 second
-    if (System.currentTimeMillis() - latency > 15000) {
+    if (debug && System.currentTimeMillis() - latency > 15000) {
       printStateMap();
+      latency = System.currentTimeMillis();
     }
-    latency = System.currentTimeMillis();
+  }
+
+  public LinkedList<Tuple> getQueue(int i) {
+    return queueArray.get(i);
   }
 
   public void decrementLock() {
@@ -147,37 +155,21 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void setMaxCore(int maxCore) {
-      this.maxCore = maxCore;
+    this.maxCore = maxCore;
   }
 
   public int getMaxCore() {
     return maxCore;
   }
 
-  public void loadTuples(Tuple t) {
-    String key = t.getString(0);
-    if (keyThreadMap.get(key) != null){ // check if key is already being processed
-      queueArray.get(keyThreadMap.get(key)).add(t);
-      keyCountMap.get(key).incrementAndGet();
-    } else { //if not, just assign it to the next freeThread, if there is no free thread, just next
-      int nextFree = nextFreeQueue.pop();
-      queueArray.get(nextFree).add(t);
-      keyThreadMap.put(key, nextFree);
-      keyCountMap.put(key, new AtomicInteger(1));
-      if (nextFreeQueue.isEmpty()){
-        nextFreeQueue.push((nextFree+1)%this.numCore);
-      }
-    }
-    // simplistic hashcode allocation (outdated)
-//    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
+  public void setDebug(Boolean debug) {
+    this.debug = debug;
   }
 
-  // used by the various threads converge and load into the output queue
-  public synchronized void loadOutputTuples(Tuple t, String s) {
-    BaseCollectorTuple output = new BaseCollectorTuple(t, s);
-    collectorQueue.add(output);
+  public synchronized void loadTuples(Tuple t) {
+    inQueue.add(t);
+    shardTuples();
   }
-
 
   public synchronized void updateState(String tuple, Integer number) {
     if (stateMap.get(tuple) == null) {
@@ -188,31 +180,123 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
-  public synchronized void updateLoadBalancer(String key){
+  public synchronized void updateLoadBalancer(String key) {
+    int node = keyThreadMap.get(key);
     int numLeft = keyCountMap.get(key).decrementAndGet();
-    // check the number of task left for this key
-    if (numLeft <= 0){
-      // if no more left, remove key and update hashmaps and nextFreeThread
-      // avoiding priority queue for now to prevent extra calculation which might not help that much
-      nextFreeQueue.push(keyThreadMap.get(key));
-
-      keyCountMap.remove(key);
-      keyThreadMap.remove(key);
+    if (numLeft <= 0) {
+      // if there is no more tuples of this key left
+      // update the number of keys assigned to this node
+      if (loadArray.get(node).decrementAndGet() == 0) {
+        // if node has 0 key left, it is a "wasted" thread
+        wastedThreads++;
+        if (debug){
+          System.out.println( wastedThreads + ":: FREEING :: " + key + " <from> " + node);
+        }
+      }
+      keyCountMap.remove(key); // remove the mapping for key-tuplesleft
+      keyThreadMap.remove(key); // remove the mapping for key-node
     }
   }
 
-  public void scaleUp(int cores){
-    numCore += cores;
+  public void scaleUp(int cores) {
+    int scale = Math.abs(cores); // sanity check to prevent "negative" scaleup
+    this.numCore = Math.min(this.maxCore, this.numCore + scale);
   }
 
-  public void scaleDown(int cores){
-    numCore -= cores;
-    if (numCore <= 0){
-      numCore = 1;
+  public void scaleDown(int cores) {
+    int scale = Math.abs(cores); // sanity check to prevent "negative" down
+    this.numCore = Math.max(1, this.numCore - scale);
+  }
+
+  private int getLeastLoadedNode() {
+    int leastLoadedNode = 0;
+    int leastLoad = loadArray.get(0).get();
+    int currentLoad;
+    for (int i = 1; i < this.numCore; i++) {
+      currentLoad = loadArray.get(i).get();
+      if (currentLoad <= leastLoad) {
+        leastLoadedNode = i;
+        leastLoad = currentLoad;
+      }
     }
+    // initially leastLoadedNode has no load, now it is no longer freeloading as it
+    // is now going to be assigned a key
+    if (loadArray.get(leastLoadedNode).getAndIncrement() == 0){
+      wastedThreads--;
+    }
+    return leastLoadedNode;
+  }
+
+  private void shardTuples() {
+    // shard tuples into their thread queues if system is not frozen for migration
+    if (!getFreezeStatus()) {
+      Tuple t = inQueue.poll();
+      if (!debug && t == null) {
+        System.out.println("WARNING :: NULL TUPLE");
+        return;
+      }
+      String key = t.getString(0);
+      if (!debug && key == null) {
+        System.out.println("WARNING :: NULL TUPLE KEY");
+        return;
+      }
+      if (keyThreadMap.get(key) != null) { // check if key is already being processed
+        queueArray.get(keyThreadMap.get(key)).add(t);
+        keyCountMap.get(key).incrementAndGet();
+      } else { //if not, just assign it to the next least loaded node
+        int nextFreeNode = getLeastLoadedNode();
+        if (debug){
+          System.out.println( wastedThreads + ":: ASSIGNING :: " + key + " <to> " + nextFreeNode);
+        }
+        queueArray.get(nextFreeNode).add(t);
+        keyThreadMap.put(key, nextFreeNode);
+        keyCountMap.put(key, new AtomicInteger(1));
+      }
+    } else {
+      System.out.println("::FROZEN::");
+    }
+    //    // simplistic hashcode allocation (outdated)
+    //    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
+  }
+
+  // used by the various threads converge and load into the output queue
+  public synchronized void loadOutputTuples(Tuple t, Values v) {
+    BaseCollectorTuple output = new BaseCollectorTuple(t, v);
+    collectorQueue.add(output);
   }
 
   public void printStateMap() {
     System.out.println(Collections.singletonList(stateMap));
   }
+
+  public boolean getFreezeStatus() {
+    return this.freeze;
+  }
+
+  @Override
+  public void cleanup() {
+  }
+
+  @Override
+  public void execute(Tuple tuple) {
+  }
 }
+
+//  public void loadTuples(Tuple t) {
+//    String key = (String)t.getValue(0);
+//    if (keyThreadMap.get(key) != null){ // check if key is already being processed
+//      queueArray.get(keyThreadMap.get(key)).add(t);
+//      keyCountMap.get(key).incrementAndGet();
+//    } else { //if not, just assign it to the next freeThread, if there is no free thread, just next
+//      int nextFree = nextFreeQueue.pop();
+//      queueArray.get(nextFree).add(t);
+//      keyThreadMap.put(key, nextFree);
+//      keyCountMap.put(key, new AtomicInteger(1));
+//      if (nextFreeQueue.isEmpty()){
+//        nextFreeQueue.push((nextFree+1)%this.numCore);
+//      }
+//    }
+// simplistic hashcode allocation (outdated)
+//    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
+//  }
+
