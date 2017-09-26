@@ -65,4 +65,6 @@ public interface IElasticBolt extends IRichBolt {
 
   boolean getFreezeStatus();
 
+  void checkFreeze();
+
 }

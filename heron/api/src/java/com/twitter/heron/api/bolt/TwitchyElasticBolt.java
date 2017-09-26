@@ -13,18 +13,7 @@
 //  limitations under the License.
 package com.twitter.heron.api.bolt;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.twitter.heron.api.topology.BaseComponent;
-import com.twitter.heron.api.tuple.Tuple;
-import com.twitter.heron.api.tuple.Values;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -34,7 +23,6 @@ public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IEla
   private static final long serialVersionUID = -8986777904209608575L;
   private int twitchyness = 3;
   private int twitchProbability = 3;
-  private boolean freeze;
   private Random rng;
 
   public void initElasticBolt(OutputCollector acollector){
@@ -45,12 +33,12 @@ public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IEla
   private void twitch(){
     int amt = Math.abs(rng.nextInt(10));
     if (amt < twitchProbability){ // twitchProbability of twitching
-      amt = Math.abs(rng.nextInt()%twitchyness);
+      amt = Math.abs(Math.max(rng.nextInt()%twitchyness, 1)); // amount to twitch
       if (rng.nextInt()%2 == 0){     // 50% of the chance to scale up or down
         // go up by [0,twitchyness)
         System.out.println("SCALING_UP :: " + amt);
         scaleUp(amt);
-        freeze = true;
+        this.freeze = true;
       } else {
         // go down [0,twitchyness)
         System.out.println("SCALING_DOWN :: " + amt);
@@ -60,7 +48,7 @@ public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IEla
   }
 
   public final void runBolt() {
-    super.runBolt();
     twitch();
+    super.runBolt();
   }
 }

@@ -212,6 +212,11 @@ public class BoltInstance implements IInstance {
       @Override
       public void run() {
         // Back-pressure -- only when we could send out tuples will we read & execute tuples
+        // check to see if they is any outstanding tuples yet to be sent out
+        if (bolt instanceof IElasticBolt){
+          ((IElasticBolt) bolt).checkFreeze(); // status check to check if frozen
+          ((IElasticBolt) bolt).checkQueue();  // status check to see if they are pending output
+        }
         if (collector.isOutQueuesAvailable()) {
           readTuplesAndExecute(streamInQueue);
           // Though we may execute MAX_READ tuples, finally we will packet it as
@@ -240,11 +245,6 @@ public class BoltInstance implements IInstance {
 
     long startOfCycle = System.nanoTime();
     // Read data from in Queues
-
-    // check to see if they is any outstanding tuples yet to be sent out
-    if (bolt instanceof IElasticBolt){
-      ((IElasticBolt) bolt).checkQueue();
-    }
 
     while (!inQueue.isEmpty()) {
       Message msg = inQueue.poll();
@@ -299,7 +299,6 @@ public class BoltInstance implements IInstance {
           }
 
           ((IElasticBolt) bolt).runBolt(); // execution to be done automatically at bolt level
-
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
             long startExecuteTuple = System.nanoTime();
@@ -328,6 +327,12 @@ public class BoltInstance implements IInstance {
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
         }
+
+//        if (bolt instanceof IElasticBolt) {
+//          while (((IElasticBolt) bolt).getFreezeStatus()){
+//            // wait for freeze status to clear up
+//          }
+//        }
 
         // To avoid spending too much time
         long currentTime = System.nanoTime();
