@@ -42,6 +42,7 @@ public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IEla
       } else {
         // go down [0,twitchyness)
         System.out.println("SCALING_DOWN :: " + amt);
+        this.freeze = true;
         scaleDown(amt);
       }
     }
