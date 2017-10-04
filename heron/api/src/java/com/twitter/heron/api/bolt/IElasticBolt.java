@@ -32,9 +32,7 @@ public interface IElasticBolt extends IRichBolt {
 
   void setMaxCore(int maxCore);
 
-  int getNumCore();
-
-  int getMaxCore();
+  ConcurrentLinkedQueue<Tuple> getQueue(int i);
 
   void execute(Tuple tuple);
 
@@ -46,12 +44,6 @@ public interface IElasticBolt extends IRichBolt {
 
   void updateState(String tuple, Integer number);
 
-  void printStateMap();
-
-  ConcurrentLinkedQueue<Tuple> getQueue(int i);
-
-  void loadOutputTuples(Tuple t, Values v);
-
   void decrementLock();
 
   void checkQueue();
@@ -62,10 +54,16 @@ public interface IElasticBolt extends IRichBolt {
 
   void scaleDown(int cores);
 
-  void setDebug(Boolean debug);
-
-  boolean getFreezeStatus();
-
   void checkFreeze();
 
+  // for debugging/information
+  void setDebug(Boolean debug);
+
+  void loadOutputTuples(Tuple t, Values v);
+
+  int getNumCore();
+
+  int getMaxCore();
+
+  void printStateMap();
 }

@@ -64,7 +64,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * meant to join all the tuple outputs from various threads into a single threaded queue for the
    * queue to process
    **/
-  private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
   private ConcurrentHashMap<String, Integer> stateMap; // Serve as the inmemorystate
 
   /**
@@ -89,7 +88,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     loadArray = new ArrayList<>();
     inQueue = new LinkedList<>();
     stateMap = new ConcurrentHashMap<>();
-    collectorQueue = new ConcurrentLinkedQueue<>();
     lock = new AtomicInteger(0);
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
@@ -115,19 +113,15 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         lock.getAndIncrement();
       }
     }
-    while (lock.get() > 0) {
-      checkQueue();
-      checkFreeze();
-    }
-  }
+    while (lock.get() > 0){
 
+    }
+
+    checkQueue();
+  }
   // emit tuples if the output queue is not empty
   // done by boltinstance before runbolt
   public synchronized void checkQueue() {
-    while (!collectorQueue.isEmpty()) {
-      BaseCollectorTuple next = collectorQueue.poll();
-      collector.emit(next.getT(), next.getV());
-    }
     // debug to print state if last check is > 15 second
     if (debug && System.currentTimeMillis() - latency > 15000) {
       printStateMap();
@@ -220,39 +214,43 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   private void shardTuples() {
     // shard tuples into their thread queues if system is not frozen for migration
-    if (!getFreezeStatus() && !inQueue.isEmpty()) {
-      Tuple t = inQueue.poll();
-      if (!debug && t == null) {
-        System.out.println("WARNING :: NULL TUPLE");
-        return;
-      }
-      String key = t.getString(0);
-      if (!debug && key == null) {
-        System.out.println("WARNING :: NULL TUPLE KEY");
-        return;
-      }
-      if (keyThreadMap.get(key) != null) { // check if key is already being processed
-        queueArray.get(keyThreadMap.get(key)).add(t);
-        keyCountMap.get(key).incrementAndGet();
-      } else { //if not, just assign it to the next least loaded node
-        int nextFreeNode = getLeastLoadedNode();
-        if (debug) {
-          System.out.println("ASSIGNING :: " + key + " <to> " + nextFreeNode);
+    if (!freeze) {
+      if (!inQueue.isEmpty()) {
+        Tuple t = inQueue.poll();
+        if (!debug && t == null) {
+          System.out.println("WARNING :: NULL TUPLE");
+          return;
         }
-        queueArray.get(nextFreeNode).add(t);
-        keyThreadMap.put(key, nextFreeNode);
-        keyCountMap.put(key, new AtomicInteger(1));
+        String key = t.getString(0);
+        if (!debug && key == null) {
+          System.out.println("WARNING :: NULL TUPLE KEY");
+          return;
+        }
+        if (keyThreadMap.get(key) != null) { // check if key is already being processed
+          queueArray.get(keyThreadMap.get(key)).add(t);
+          keyCountMap.get(key).incrementAndGet();
+        } else { //if not, just assign it to the next least loaded node
+          int nextFreeNode = getLeastLoadedNode();
+          if (debug) {
+            System.out.println("ASSIGNING :: " + key + " <to> " + nextFreeNode);
+          }
+          queueArray.get(nextFreeNode).add(t);
+          keyThreadMap.put(key, nextFreeNode);
+          keyCountMap.put(key, new AtomicInteger(1));
+        }
       }
     } else {
-      System.out.println("::FROZEN:: " + this.numCore + "/" + this.maxCore);
-      System.out.println(loadArray + " :: " + this.inQueue.size());
+      checkFreeze();
     }
+//    else {
+//      System.out.println("::FROZEN:: " + this.numCore + "/" + this.maxCore);
+//      System.out.println(loadArray + " :: " + this.inQueue.size());
+//    }
   }
 
-  // used by the various threads converge and load into the output queue
+  // used by the various threads converge and synchroniously load into the output queue
   public synchronized void loadOutputTuples(Tuple t, Values v) {
-    BaseCollectorTuple output = new BaseCollectorTuple(t, v);
-    collectorQueue.add(output);
+    collector.emit(t, v);
   }
 
   public void printStateMap() {
