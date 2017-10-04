@@ -32,7 +32,7 @@ public interface IElasticBolt extends IRichBolt {
 
   void setMaxCore(int maxCore);
 
-  ConcurrentLinkedQueue<Tuple> getQueue(int i);
+  LinkedList<Tuple> getQueue(int i);
 
   void execute(Tuple tuple);
 

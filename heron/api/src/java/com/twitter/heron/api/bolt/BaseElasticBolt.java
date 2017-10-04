@@ -18,12 +18,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
+import com.twitter.heron.api.utils.Utils;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -35,6 +35,9 @@ import com.twitter.heron.api.tuple.Values;
 
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
+  private static final int backPressureLowerThreshold = 500;
+  private static final int backPressureUpperThreshold = 1500;
+
 
   private OutputCollector collector;
   private long latency = System.currentTimeMillis();
@@ -46,6 +49,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // this is used to synchronize/join all the threads in one iteration of processing
   private AtomicInteger lock;
 
+
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
    * LinkedList as the internal queue due to its better add/remove performance
@@ -53,7 +57,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Serves as the the single point of entry of in-buffer for this elastibolt
   private LinkedList<Tuple> inQueue; // LL due to its high add and remove frequency
   // Serves as the map of queue to feed tuples into various threads
-  private ArrayList<ConcurrentLinkedQueue<Tuple>> queueArray;
+  private ArrayList<LinkedList<Tuple>> queueArray;
   // Keeps track of the threads in this ElasticBolt
   private ArrayList<BaseElasthread> threadArray;
 
@@ -93,7 +97,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     keyThreadMap = new HashMap<>();
     freeze = false;
     for (int i = 0; i < this.maxCore; i++) {
-      queueArray.add(new ConcurrentLinkedQueue<>());
+      queueArray.add(new LinkedList<>());
       threadArray.add(new BaseElasthread(String.valueOf(i), this));
       loadArray.add(new AtomicInteger(0));
     }
@@ -104,7 +108,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       // for each of the "core" assigned which is represented by a thread, we check its queue to
       // see if it is empty, if its not empty, and thread
       // is null we create a new thread and run it
-      if (!getQueue(i).isEmpty()) {
+      if (!queueArray.get(i).isEmpty()) {
         if (threadArray.get(i) == null) {
           threadArray.add(new BaseElasthread(String.valueOf(i), this));
         }
@@ -113,10 +117,14 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         lock.getAndIncrement();
       }
     }
-    while (lock.get() > 0){
-
+    int numOutStanding = numOutStanding();
+    if (numOutStanding >= backPressureUpperThreshold){
+      while (true){
+        if (numOutStanding() > backPressureLowerThreshold){
+          Utils.sleep(10); // sleep for a while if there are too many outstanding tuples
+        }
+      }
     }
-
     checkQueue();
   }
   // emit tuples if the output queue is not empty
@@ -129,7 +137,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
-  public ConcurrentLinkedQueue<Tuple> getQueue(int i) {
+  public LinkedList<Tuple> getQueue(int i) {
     return queueArray.get(i);
   }
 
@@ -269,8 +277,18 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
+  public int numOutStanding(){
+    int outstanding = 0;
+    for (int i = 0; i < queueArray.size(); i++){
+      outstanding += queueArray.get(i).size();
+    }
+    return outstanding;
+  }
+
   // simplified the check free procedure
   public void checkFreeze() {
+
+    System.out.println("~~:: " + numOutStanding() + " ::~~");
     // check to see if each queue is empty if all of them are empty unfreeze the system
     for (int i = 0; i < queueArray.size(); i++){
       if (!queueArray.get(i).isEmpty()){

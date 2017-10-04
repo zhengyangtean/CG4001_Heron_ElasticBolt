@@ -32,7 +32,7 @@ public class BaseElasthread implements IElasthread {
   }
 
   public void run() {
-    ConcurrentLinkedQueue<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
+    LinkedList<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
     while (!q.isEmpty()) {
       Tuple nextTuple = q.poll();
       parentBolt.execute(nextTuple);
