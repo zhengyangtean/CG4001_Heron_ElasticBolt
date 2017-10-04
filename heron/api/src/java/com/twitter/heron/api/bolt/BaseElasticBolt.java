@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
-import com.twitter.heron.api.utils.Utils;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -33,6 +32,7 @@ import com.twitter.heron.api.utils.Utils;
  * > Tuple have key String at index 0, ie. tuple.getString(0) returns the tuple's key
  * > unbounded stream of incoming tuples from upstream bolt/sprout
  */
+
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
 
@@ -53,11 +53,10 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Serves as the the single point of entry of in-buffer for this elastibolt
   private LinkedList<Tuple> inQueue; // LL due to its high add and remove frequency
   // Serves as the map of queue to feed tuples into various threads
-  private ArrayList<LinkedList<Tuple>> queueArray;
+  private ArrayList<ConcurrentLinkedQueue<Tuple>> queueArray;
   // Keeps track of the threads in this ElasticBolt
   private ArrayList<BaseElasthread> threadArray;
-  private ArrayList<AtomicInteger> loadArray;
-  private int wastedThreads;
+
   public Boolean freeze;
 
   /**
@@ -68,8 +67,12 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private ConcurrentLinkedQueue<BaseCollectorTuple> collectorQueue;
   private ConcurrentHashMap<String, Integer> stateMap; // Serve as the inmemorystate
 
+  /**
+   * Various data structure to keep track of the load for sharding and scaling purpose
+   */
   private HashMap<String, AtomicInteger> keyCountMap;
   private HashMap<String, Integer> keyThreadMap;
+  private ArrayList<AtomicInteger> loadArray;
   public boolean debug = false;
 
   /**
@@ -90,10 +93,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     lock = new AtomicInteger(0);
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
-    wastedThreads = this.numCore;
     freeze = false;
     for (int i = 0; i < this.maxCore; i++) {
-      queueArray.add(new LinkedList<>());
+      queueArray.add(new ConcurrentLinkedQueue<>());
       threadArray.add(new BaseElasthread(String.valueOf(i), this));
       loadArray.add(new AtomicInteger(0));
     }
@@ -114,13 +116,14 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       }
     }
     while (lock.get() > 0) {
-      Utils.sleep(1); // waits for threads finish their jobs and to "join"
+      checkQueue();
+      checkFreeze();
     }
   }
 
   // emit tuples if the output queue is not empty
   // done by boltinstance before runbolt
-  public void checkQueue() {
+  public synchronized void checkQueue() {
     while (!collectorQueue.isEmpty()) {
       BaseCollectorTuple next = collectorQueue.poll();
       collector.emit(next.getT(), next.getV());
@@ -132,7 +135,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
-  public LinkedList<Tuple> getQueue(int i) {
+  public ConcurrentLinkedQueue<Tuple> getQueue(int i) {
     return queueArray.get(i);
   }
 
@@ -180,13 +183,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     if (numLeft <= 0) {
       // if there is no more tuples of this key left
       // update the number of keys assigned to this node
-      if (loadArray.get(node).decrementAndGet() == 0) {
-        // if node has 0 key left, it is a "wasted" thread
-        wastedThreads++;
-        if (debug) {
-          System.out.println(wastedThreads + " :: FREEING :: " + key + " <from> " + node);
-        }
-      }
+      loadArray.get(node).decrementAndGet();
       keyCountMap.remove(key); // remove the mapping for key-tuplesleft
       keyThreadMap.remove(key); // remove the mapping for key-node
     }
@@ -195,11 +192,13 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void scaleUp(int cores) {
     int scale = Math.abs(cores); // sanity check to prevent "negative" scaleup
     this.numCore = Math.min(this.maxCore, this.numCore + scale);
+    this.freeze = true;
   }
 
   public void scaleDown(int cores) {
     int scale = Math.abs(cores); // sanity check to prevent "negative" down
     this.numCore = Math.max(1, this.numCore - scale);
+    this.freeze = true;
   }
 
   private int getLeastLoadedNode() {
@@ -215,9 +214,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
     // initially leastLoadedNode has no load, now it is no longer freeloading as it
     // is now going to be assigned a key
-    if (loadArray.get(leastLoadedNode).getAndIncrement() == 0) {
-      wastedThreads--;
-    }
+    loadArray.get(leastLoadedNode).getAndIncrement();
     return leastLoadedNode;
   }
 
@@ -240,18 +237,16 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       } else { //if not, just assign it to the next least loaded node
         int nextFreeNode = getLeastLoadedNode();
         if (debug) {
-          System.out.println(wastedThreads + " :: ASSIGNING :: " + key + " <to> " + nextFreeNode);
+          System.out.println("ASSIGNING :: " + key + " <to> " + nextFreeNode);
         }
         queueArray.get(nextFreeNode).add(t);
         keyThreadMap.put(key, nextFreeNode);
         keyCountMap.put(key, new AtomicInteger(1));
       }
     } else {
-      System.out.println("::FROZEN:: " + this.wastedThreads + "/" + this.numCore + "/" + this.maxCore);
+      System.out.println("::FROZEN:: " + this.numCore + "/" + this.maxCore);
       System.out.println(loadArray + " :: " + this.inQueue.size());
     }
-    //    // simplistic hashcode allocation (outdated)
-    //    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
   }
 
   // used by the various threads converge and load into the output queue
@@ -276,37 +271,16 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
+  // simplified the check free procedure
   public void checkFreeze() {
-    if (this.wastedThreads >= this.numCore) {
-      if (this.freeze) {
-        System.out.println("::Unfreezing::");
-      }
-      this.freeze = false;
-      while (!inQueue.isEmpty()){
-        if (this.freeze){
-          break;
-        }
-        shardTuples();
+    // check to see if each queue is empty if all of them are empty unfreeze the system
+    for (int i = 0; i < queueArray.size(); i++){
+      if (!queueArray.get(i).isEmpty()){
+        return;
       }
     }
+    this.freeze = false;
+    return;
   }
 }
-
-//  public void loadTuples(Tuple t) {
-//    String key = (String)t.getValue(0);
-//    if (keyThreadMap.get(key) != null){ // check if key is already being processed
-//      queueArray.get(keyThreadMap.get(key)).add(t);
-//      keyCountMap.get(key).incrementAndGet();
-//    } else { //if not, just assign it to the next freeThread, if there is no free thread, next
-//      int nextFree = nextFreeQueue.pop();
-//      queueArray.get(nextFree).add(t);
-//      keyThreadMap.put(key, nextFree);
-//      keyCountMap.put(key, new AtomicInteger(1));
-//      if (nextFreeQueue.isEmpty()){
-//        nextFreeQueue.push((nextFree+1)%this.numCore);
-//      }
-//    }
-// simplistic hashcode allocation (outdated)
-//    queueArray.get(Math.abs(t.getString(0).hashCode()) % this.numCore).add(t);
-//  }
 

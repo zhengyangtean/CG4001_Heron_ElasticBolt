@@ -15,6 +15,7 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
@@ -47,7 +48,7 @@ public interface IElasticBolt extends IRichBolt {
 
   void printStateMap();
 
-  LinkedList<Tuple> getQueue(int i);
+  ConcurrentLinkedQueue<Tuple> getQueue(int i);
 
   void loadOutputTuples(Tuple t, Values v);
 

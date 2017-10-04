@@ -14,6 +14,7 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.twitter.heron.api.tuple.Tuple;
 
@@ -31,7 +32,7 @@ public class BaseElasthread implements IElasthread {
   }
 
   public void run() {
-    LinkedList<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
+    ConcurrentLinkedQueue<Tuple> q = parentBolt.getQueue(Integer.parseInt(threadName));
     while (!q.isEmpty()) {
       Tuple nextTuple = q.poll();
       parentBolt.execute(nextTuple);

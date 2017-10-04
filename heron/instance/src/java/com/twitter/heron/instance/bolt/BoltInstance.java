@@ -213,10 +213,10 @@ public class BoltInstance implements IInstance {
       public void run() {
         // Back-pressure -- only when we could send out tuples will we read & execute tuples
         // check to see if they is any outstanding tuples yet to be sent out
-        if (bolt instanceof IElasticBolt){
-          ((IElasticBolt) bolt).checkFreeze(); // status check to check if frozen
-          ((IElasticBolt) bolt).checkQueue();  // status check to see if they are pending output
-        }
+//        if (bolt instanceof IElasticBolt){
+//          ((IElasticBolt) bolt).checkFreeze(); // status check to check if frozen
+//          ((IElasticBolt) bolt).checkQueue();  // status check to see if they are pending output
+//        }
         if (collector.isOutQueuesAvailable()) {
           readTuplesAndExecute(streamInQueue);
           // Though we may execute MAX_READ tuples, finally we will packet it as
