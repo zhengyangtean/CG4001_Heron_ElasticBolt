@@ -40,7 +40,6 @@ public class BaseElasthread implements IElasthread {
       parentBolt.updateLoadBalancer(nextTuple.getString(0));
     }
     t = null;
-    parentBolt.decrementLock();
   }
 
   public void start() {

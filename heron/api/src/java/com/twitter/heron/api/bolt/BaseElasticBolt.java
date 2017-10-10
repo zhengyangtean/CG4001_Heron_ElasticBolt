@@ -17,10 +17,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.twitter.heron.api.topology.BaseComponent;
+import com.twitter.heron.api.topology.TopologyContext;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
 import com.twitter.heron.api.utils.Utils;
@@ -35,9 +37,6 @@ import com.twitter.heron.api.utils.Utils;
 
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
-  private static final int backPressureLowerThreshold = 500;
-  private static final int backPressureUpperThreshold = 1500;
-
 
   private OutputCollector collector;
   private long latency = System.currentTimeMillis();
@@ -45,10 +44,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Cores are the number of threads that are running
   private int numCore = -1; // numCore are the number of threads currently being used
   private int maxCore = -1; // maxCore are the number of threads the system has
-
-  // this is used to synchronize/join all the threads in one iteration of processing
-  private AtomicInteger lock;
-
+  private int backPressureLowerThreshold = 50;
+  private int backPressureUpperThreshold = 150;
 
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
@@ -78,6 +75,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private ArrayList<AtomicInteger> loadArray;
   public boolean debug = false;
 
+
+  public void prepare(Map<String, Object> heronConf, TopologyContext context) {
+    System.out.println("CRYING WOLFF AHH WHHHOOOOOOOO");
+  }
+
   /**
    * Initialize the Elasticbolt with the required data structures and threads
    * based on the topology
@@ -92,7 +94,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     loadArray = new ArrayList<>();
     inQueue = new LinkedList<>();
     stateMap = new ConcurrentHashMap<>();
-    lock = new AtomicInteger(0);
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
     freeze = false;
@@ -113,16 +114,12 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
           threadArray.add(new BaseElasthread(String.valueOf(i), this));
         }
         threadArray.get(i).start();
-        // update the number of threads running at the moment
-        lock.getAndIncrement();
       }
     }
-    int numOutStanding = numOutStanding();
+    int numOutStanding = getNumOutStanding();
     if (numOutStanding >= backPressureUpperThreshold){
-      while (true){
-        if (numOutStanding() > backPressureLowerThreshold){
-          Utils.sleep(10); // sleep for a while if there are too many outstanding tuples
-        }
+      while (getNumOutStanding() > backPressureLowerThreshold){
+        Utils.sleep(10); // sleep for a while if there are too many outstanding tuples
       }
     }
     checkQueue();
@@ -139,10 +136,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   public LinkedList<Tuple> getQueue(int i) {
     return queueArray.get(i);
-  }
-
-  public void decrementLock() {
-    lock.getAndDecrement();
   }
 
   public int getNumCore() {
@@ -250,10 +243,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     } else {
       checkFreeze();
     }
-//    else {
-//      System.out.println("::FROZEN:: " + this.numCore + "/" + this.maxCore);
-//      System.out.println(loadArray + " :: " + this.inQueue.size());
-//    }
   }
 
   // used by the various threads converge and synchroniously load into the output queue
@@ -277,7 +266,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
-  public int numOutStanding(){
+  public int getNumOutStanding(){
     int outstanding = 0;
     for (int i = 0; i < queueArray.size(); i++){
       outstanding += queueArray.get(i).size();
@@ -288,15 +277,24 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // simplified the check free procedure
   public void checkFreeze() {
 
-    System.out.println("~~:: " + numOutStanding() + " ::~~");
-    // check to see if each queue is empty if all of them are empty unfreeze the system
+    System.out.println("~~:: " + getNumOutStanding() + " ::~~");
+    // check to see if each queue is empty
     for (int i = 0; i < queueArray.size(); i++){
+      // if there exist a case where a queue is not empty wait return and wait for next check
       if (!queueArray.get(i).isEmpty()){
         return;
       }
     }
+    // if all of them are empty unfreeze the system
     this.freeze = false;
-    return;
+  }
+
+  public void setBackPressureLowerThreshold(int newValue){
+    this.backPressureLowerThreshold = newValue;
+  }
+
+  public void setBackPressureUpperThreshold(int newValue){
+    this.backPressureUpperThreshold = newValue;
   }
 }
 

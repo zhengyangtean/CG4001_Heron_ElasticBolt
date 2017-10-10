@@ -44,8 +44,6 @@ public interface IElasticBolt extends IRichBolt {
 
   void updateState(String tuple, Integer number);
 
-  void decrementLock();
-
   void checkQueue();
 
   void updateLoadBalancer(String key);
@@ -64,6 +62,12 @@ public interface IElasticBolt extends IRichBolt {
   int getNumCore();
 
   int getMaxCore();
+
+  void setBackPressureLowerThreshold(int newValue);
+
+  void setBackPressureUpperThreshold(int newValue);
+
+  int getNumOutStanding();
 
   void printStateMap();
 }
