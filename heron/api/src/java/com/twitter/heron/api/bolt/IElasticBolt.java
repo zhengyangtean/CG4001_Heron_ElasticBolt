@@ -15,7 +15,6 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.LinkedList;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
@@ -40,7 +39,7 @@ public interface IElasticBolt extends IRichBolt {
 
   void runBolt();
 
-  void initElasticBolt(OutputCollector collector);
+  void initElasticBolt(OutputCollector boltCollector);
 
   void updateState(String tuple, Integer number);
 
@@ -66,6 +65,8 @@ public interface IElasticBolt extends IRichBolt {
   void setBackPressureLowerThreshold(int newValue);
 
   void setBackPressureUpperThreshold(int newValue);
+
+  void setSleepDuration(int newValue);
 
   int getNumOutStanding();
 

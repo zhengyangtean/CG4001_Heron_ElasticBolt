@@ -170,7 +170,7 @@ public class BoltInstance implements IInstance {
       topologyContext.invokeHookPrepare();
 
       // Pass collector into elasticbolt incase the topology requires the bolt to  emit tuples
-      ((IElasticBolt) bolt).initElasticBolt(boltCollector);
+      ((IElasticBolt) bolt).initElasticBolt( boltCollector);
     } else {
       // Delegate
       bolt.prepare(
@@ -282,6 +282,9 @@ public class BoltInstance implements IInstance {
             TupleImpl t = new TupleImpl(topologyContext, stream, dataTuple.getKey(),
                 dataTuple.getRootsList(), values, startExecuteTuple, false, sourceTaskId);
 
+            while (!collector.isOutQueuesAvailable()){
+              Utils.sleep(1);
+            }
             // Load ElasticBolt
             ((IElasticBolt) bolt).loadTuples(t);
 
@@ -297,8 +300,6 @@ public class BoltInstance implements IInstance {
             // Update metrics
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
-
-          ((IElasticBolt) bolt).runBolt(); // execution to be done automatically at bolt level
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
             long startExecuteTuple = System.nanoTime();
@@ -340,6 +341,10 @@ public class BoltInstance implements IInstance {
           break;
         }
       }
+    }
+
+    if (bolt instanceof IElasticBolt) {
+      ((IElasticBolt) bolt).runBolt(); // execution to be done automatically at bolt level
     }
   }
 

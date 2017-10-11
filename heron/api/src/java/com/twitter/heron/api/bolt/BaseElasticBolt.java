@@ -26,6 +26,7 @@ import com.twitter.heron.api.topology.TopologyContext;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
 import com.twitter.heron.api.utils.Utils;
+import com.twitter.heron.instance.bolt.BoltOutputCollectorImpl;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -33,12 +34,29 @@ import com.twitter.heron.api.utils.Utils;
  * > key for the state are strings and the values and integers
  * > Tuple have key String at index 0, ie. tuple.getString(0) returns the tuple's key
  * > unbounded stream of incoming tuples from upstream bolt/sprout
+ *
+ * The advantage of using an ElasticBolt is that it
+ * 1. reduces the overhead of resources needed to otherwise create other heron instance to host
+ * the duplicated bolts
+ * 2. ElasticBolts are also elastic in the sense that it has the ability to scale up and down
+ * the number of threads, hence cores which are used to process tuples without disrupting the
+ * processing of tuples, in a regular bolt, one would need to run the heron update command which
+ * temporarily halts processing of tuples. Which is disruptive to tuple processing
+ * this is less responsive to the change as compared to ElasticBolt which has an API exposed to
+ * allow the user to remotely scale up or down a bolt without halting tuple processing
+ * 3. ElasticBolts are also tunable, using the upperThresh, upperThresh and sleepDuration the user
+ * can choose to to make the bolt faster and more aggressive, to be able to have higher throughput
+ *
+ * However it is noteworthy that it is possible for the Elasticbolt to process the tuples so fast
+ * and emit it such that it overwhelm the collector's output queue which will then crash the
+ * bolt, it is advisable for the user to test experiment with their typical workload and
+ * tune Elasticbolt accordingly to maximize speed yet at the same time not overloading the output
  */
 
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 4309732999277305080L;
 
-  private OutputCollector collector;
+  private OutputCollector boltCollector;
   private long latency = System.currentTimeMillis();
 
   // Cores are the number of threads that are running
@@ -46,6 +64,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private int maxCore = -1; // maxCore are the number of threads the system has
   private int backPressureLowerThreshold = 50;
   private int backPressureUpperThreshold = 150;
+  private int sleepDuration = 20;
 
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
@@ -84,11 +103,12 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * Initialize the Elasticbolt with the required data structures and threads
    * based on the topology
    *
-   * @param acollector The acollector is the OutputCollector used by this bolt to emit tuples
+   * @param boltCollector The acollector is the OutputCollector used by this bolt to emit tuples
    * downstream
+   *
    */
-  public void initElasticBolt(OutputCollector acollector) {
-    collector = acollector;
+  public void initElasticBolt(OutputCollector boltCollector) {
+    this.boltCollector = boltCollector;
     queueArray = new ArrayList<>();
     threadArray = new ArrayList<>();
     loadArray = new ArrayList<>();
@@ -116,10 +136,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         threadArray.get(i).start();
       }
     }
-    int numOutStanding = getNumOutStanding();
-    if (numOutStanding >= backPressureUpperThreshold){
+    if (getNumOutStanding() >= backPressureUpperThreshold){
       while (getNumOutStanding() > backPressureLowerThreshold){
-        Utils.sleep(10); // sleep for a while if there are too many outstanding tuples
+        Utils.sleep(this.sleepDuration); // sleep for a while if there are too many outstanding tuples
       }
     }
     checkQueue();
@@ -247,7 +266,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   // used by the various threads converge and synchroniously load into the output queue
   public synchronized void loadOutputTuples(Tuple t, Values v) {
-    collector.emit(t, v);
+      boltCollector.emit(t, v);
   }
 
   public void printStateMap() {
@@ -295,6 +314,10 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   public void setBackPressureUpperThreshold(int newValue){
     this.backPressureUpperThreshold = newValue;
+  }
+
+  public void setSleepDuration(int newValue){
+    this.sleepDuration = newValue;
   }
 }
 

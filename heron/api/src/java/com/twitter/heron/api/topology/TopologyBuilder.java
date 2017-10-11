@@ -167,8 +167,28 @@ public class TopologyBuilder {
     return b;
   }
 
+  /**
+   * Define a new bolt in this topology. This defines a IElastic bolt, which is a
+   * Potentially faster and more aggressive bolt which preloads all available tuple at once
+   * Using threads to enable concurrent processing of multiple tuples at once within a bolt,*
+   *
+   * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
+   * @param bolt bolt which is of IElasticBolt
+   * @param desiredParallelism the number Elasticbolts to be created
+   * @param numtds the initial number of threads per ElasticBolt
+   * @param debug should debug message be shown
+   * @param upperThresh the upperthreshold of the number of outstanding tuples pending in this bolt
+   * before "backpressure" kicks in
+   * @param upperThresh the lowerThresh of the number of outstanding tuples pending in this bolt
+   * before "backpressure" is released
+   * @param sleepDuration the amount of timeout in the case of "backpressure", important to set to
+   * a suitable amount to prevent bolt from overwhelming outstream, especially for simple and fast
+   * execute logic
+   * @return use the returned object to declare the inputs to this component
+   */
   public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism,
-                              int numtds, boolean debug, int upperThresh, int lowerThresh) {
+                              int numtds, boolean debug, int upperThresh, int lowerThresh,
+                              int sleepDuration) {
     validateComponentName(id);
 
     int realNumThread = numtds;
@@ -183,6 +203,7 @@ public class TopologyBuilder {
     bolt.setDebug(debug);
     bolt.setBackPressureLowerThreshold(lowerThresh);
     bolt.setBackPressureUpperThreshold(upperThresh);
+    bolt.setSleepDuration(sleepDuration);
 
     BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
     bolts.put(id, b);
