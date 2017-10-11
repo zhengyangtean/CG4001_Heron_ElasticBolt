@@ -26,7 +26,6 @@ import com.twitter.heron.api.topology.TopologyContext;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
 import com.twitter.heron.api.utils.Utils;
-import com.twitter.heron.instance.bolt.BoltOutputCollectorImpl;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -65,6 +64,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private int backPressureLowerThreshold = 50;
   private int backPressureUpperThreshold = 150;
   private int sleepDuration = 20;
+  private boolean backPressure = false;
 
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
@@ -93,11 +93,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private HashMap<String, Integer> keyThreadMap;
   private ArrayList<AtomicInteger> loadArray;
   public boolean debug = false;
-
-
-  public void prepare(Map<String, Object> heronConf, TopologyContext context) {
-    System.out.println("CRYING WOLFF AHH WHHHOOOOOOOO");
-  }
 
   /**
    * Initialize the Elasticbolt with the required data structures and threads
@@ -137,9 +132,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       }
     }
     if (getNumOutStanding() >= backPressureUpperThreshold){
+      backPressure = true;
       while (getNumOutStanding() > backPressureLowerThreshold){
         Utils.sleep(this.sleepDuration); // sleep for a while if there are too many outstanding tuples
       }
+      backPressure = false;
     }
     checkQueue();
   }
@@ -314,6 +311,10 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   public void setBackPressureUpperThreshold(int newValue){
     this.backPressureUpperThreshold = newValue;
+  }
+
+  public boolean getBackPressure(){
+    return backPressure;
   }
 
   public void setSleepDuration(int newValue){

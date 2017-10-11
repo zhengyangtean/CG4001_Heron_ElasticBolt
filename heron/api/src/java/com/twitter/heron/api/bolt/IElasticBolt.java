@@ -66,6 +66,8 @@ public interface IElasticBolt extends IRichBolt {
 
   void setBackPressureUpperThreshold(int newValue);
 
+  boolean getBackPressure();
+
   void setSleepDuration(int newValue);
 
   int getNumOutStanding();

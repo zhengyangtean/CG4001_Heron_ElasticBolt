@@ -217,8 +217,17 @@ public class BoltInstance implements IInstance {
 //          ((IElasticBolt) bolt).checkFreeze(); // status check to check if frozen
 //          ((IElasticBolt) bolt).checkQueue();  // status check to see if they are pending output
 //        }
+
         if (collector.isOutQueuesAvailable()) {
-          readTuplesAndExecute(streamInQueue);
+
+          if (bolt instanceof IElasticBolt) {
+            // only read if there is no backpressure
+            if (!((IElasticBolt) bolt).getBackPressure()){
+              readTuplesAndExecute(streamInQueue);
+            }
+          } else {
+            readTuplesAndExecute(streamInQueue);
+          }
           // Though we may execute MAX_READ tuples, finally we will packet it as
           // one outgoingPacket and push to out queues
           collector.sendOutTuples();
