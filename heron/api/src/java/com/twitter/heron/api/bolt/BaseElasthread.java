@@ -14,7 +14,6 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.LinkedList;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.twitter.heron.api.tuple.Tuple;
 

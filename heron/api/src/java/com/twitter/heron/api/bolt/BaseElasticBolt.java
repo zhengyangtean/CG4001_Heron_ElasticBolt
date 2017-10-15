@@ -17,12 +17,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.twitter.heron.api.topology.BaseComponent;
-import com.twitter.heron.api.topology.TopologyContext;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
 import com.twitter.heron.api.utils.Utils;
@@ -50,6 +48,7 @@ import com.twitter.heron.api.utils.Utils;
  * and emit it such that it overwhelm the collector's output queue which will then crash the
  * bolt, it is advisable for the user to test experiment with their typical workload and
  * tune Elasticbolt accordingly to maximize speed yet at the same time not overloading the output
+ * if we remove the check in the bolt instance to block
  */
 
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
@@ -77,8 +76,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Keeps track of the threads in this ElasticBolt
   private ArrayList<BaseElasthread> threadArray;
 
-  public Boolean freeze;
-
   /**
    * As the collector is not threadsafe, this concurrent queue is
    * meant to join all the tuple outputs from various threads into a single threaded queue for the
@@ -92,18 +89,19 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private HashMap<String, AtomicInteger> keyCountMap;
   private HashMap<String, Integer> keyThreadMap;
   private ArrayList<AtomicInteger> loadArray;
+  private AtomicInteger outstandingTuples;
   public boolean debug = false;
 
   /**
    * Initialize the Elasticbolt with the required data structures and threads
    * based on the topology
    *
-   * @param boltCollector The acollector is the OutputCollector used by this bolt to emit tuples
+   * @param aCollector The acollector is the OutputCollector used by this bolt to emit tuples
    * downstream
    *
    */
-  public void initElasticBolt(OutputCollector boltCollector) {
-    this.boltCollector = boltCollector;
+  public void initElasticBolt(OutputCollector aCollector) {
+    this.boltCollector = aCollector;
     queueArray = new ArrayList<>();
     threadArray = new ArrayList<>();
     loadArray = new ArrayList<>();
@@ -111,7 +109,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     stateMap = new ConcurrentHashMap<>();
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
-    freeze = false;
+    outstandingTuples = new AtomicInteger(0);
     for (int i = 0; i < this.maxCore; i++) {
       queueArray.add(new LinkedList<>());
       threadArray.add(new BaseElasthread(String.valueOf(i), this));
@@ -131,14 +129,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         threadArray.get(i).start();
       }
     }
-    if (getNumOutStanding() >= backPressureUpperThreshold){
-      backPressure = true;
-      while (getNumOutStanding() > backPressureLowerThreshold){
-        Utils.sleep(this.sleepDuration); // sleep for a while if there are too many outstanding tuples
-      }
-      backPressure = false;
+    if (debug) {
+      checkQueue();
     }
-    checkQueue();
   }
   // emit tuples if the output queue is not empty
   // done by boltinstance before runbolt
@@ -177,6 +170,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public synchronized void loadTuples(Tuple t) {
     inQueue.add(t);
     shardTuples();
+    outstandingTuples.incrementAndGet();
   }
 
   public synchronized void updateState(String tuple, Integer number) {
@@ -191,6 +185,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public synchronized void updateLoadBalancer(String key) {
     int node = keyThreadMap.get(key);
     int numLeft = keyCountMap.get(key).decrementAndGet();
+    outstandingTuples.decrementAndGet();
     if (numLeft <= 0) {
       // if there is no more tuples of this key left
       // update the number of keys assigned to this node
@@ -203,13 +198,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void scaleUp(int cores) {
     int scale = Math.abs(cores); // sanity check to prevent "negative" scaleup
     this.numCore = Math.min(this.maxCore, this.numCore + scale);
-    this.freeze = true;
   }
 
   public void scaleDown(int cores) {
     int scale = Math.abs(cores); // sanity check to prevent "negative" down
     this.numCore = Math.max(1, this.numCore - scale);
-    this.freeze = true;
   }
 
   private int getLeastLoadedNode() {
@@ -231,47 +224,43 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   private void shardTuples() {
     // shard tuples into their thread queues if system is not frozen for migration
-    if (!freeze) {
-      if (!inQueue.isEmpty()) {
-        Tuple t = inQueue.poll();
-        if (!debug && t == null) {
-          System.out.println("WARNING :: NULL TUPLE");
-          return;
-        }
-        String key = t.getString(0);
-        if (!debug && key == null) {
-          System.out.println("WARNING :: NULL TUPLE KEY");
-          return;
-        }
-        if (keyThreadMap.get(key) != null) { // check if key is already being processed
-          queueArray.get(keyThreadMap.get(key)).add(t);
-          keyCountMap.get(key).incrementAndGet();
-        } else { //if not, just assign it to the next least loaded node
-          int nextFreeNode = getLeastLoadedNode();
-          if (debug) {
-            System.out.println("ASSIGNING :: " + key + " <to> " + nextFreeNode);
-          }
-          queueArray.get(nextFreeNode).add(t);
-          keyThreadMap.put(key, nextFreeNode);
-          keyCountMap.put(key, new AtomicInteger(1));
-        }
+    while (!inQueue.isEmpty()) {
+      Tuple t = inQueue.poll();
+      if (!debug && t == null) {
+        System.out.println("WARNING :: NULL TUPLE");
+        return;
       }
-    } else {
-      checkFreeze();
+      String key = t.getString(0);
+      if (!debug && key == null) {
+        System.out.println("WARNING :: NULL TUPLE KEY");
+        return;
+      }
+      if (keyThreadMap.get(key) != null) { // check if key is already being processed
+        queueArray.get(keyThreadMap.get(key)).add(t);
+        keyCountMap.get(key).incrementAndGet();
+      } else { //if not, just assign it to the next least loaded node
+        int nextFreeNode = getLeastLoadedNode();
+        if (debug) {
+          System.out.println("ASSIGNING :: " + key + " <to> " + nextFreeNode);
+        }
+        queueArray.get(nextFreeNode).add(t);
+        keyThreadMap.put(key, nextFreeNode);
+        keyCountMap.put(key, new AtomicInteger(1));
+      }
     }
   }
 
   // used by the various threads converge and synchroniously load into the output queue
   public synchronized void loadOutputTuples(Tuple t, Values v) {
-      boltCollector.emit(t, v);
+    boltCollector.emit(t, v);
   }
 
   public void printStateMap() {
     System.out.println(Collections.singletonList(stateMap));
   }
 
-  public boolean getFreezeStatus() {
-    return this.freeze;
+  public int getSleepDuration() {
+    return this.sleepDuration;
   }
 
   @Override
@@ -282,42 +271,11 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void execute(Tuple tuple) {
   }
 
-  public int getNumOutStanding(){
-    int outstanding = 0;
-    for (int i = 0; i < queueArray.size(); i++){
-      outstanding += queueArray.get(i).size();
-    }
-    return outstanding;
+  public int getNumOutStanding() {
+    return outstandingTuples.get();
   }
 
-  // simplified the check free procedure
-  public void checkFreeze() {
-
-    System.out.println("~~:: " + getNumOutStanding() + " ::~~");
-    // check to see if each queue is empty
-    for (int i = 0; i < queueArray.size(); i++){
-      // if there exist a case where a queue is not empty wait return and wait for next check
-      if (!queueArray.get(i).isEmpty()){
-        return;
-      }
-    }
-    // if all of them are empty unfreeze the system
-    this.freeze = false;
-  }
-
-  public void setBackPressureLowerThreshold(int newValue){
-    this.backPressureLowerThreshold = newValue;
-  }
-
-  public void setBackPressureUpperThreshold(int newValue){
-    this.backPressureUpperThreshold = newValue;
-  }
-
-  public boolean getBackPressure(){
-    return backPressure;
-  }
-
-  public void setSleepDuration(int newValue){
+  public void setSleepDuration(int newValue) {
     this.sleepDuration = newValue;
   }
 }

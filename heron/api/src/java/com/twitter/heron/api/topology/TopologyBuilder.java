@@ -148,7 +148,8 @@ public class TopologyBuilder {
     return b;
   }
 
-  public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism, int numtds, boolean debug) {
+  public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism,
+                              int numtds, boolean debug) {
     validateComponentName(id);
 
     int realNumThread = numtds;
@@ -177,18 +178,13 @@ public class TopologyBuilder {
    * @param desiredParallelism the number Elasticbolts to be created
    * @param numtds the initial number of threads per ElasticBolt
    * @param debug should debug message be shown
-   * @param upperThresh the upperthreshold of the number of outstanding tuples pending in this bolt
-   * before "backpressure" kicks in
-   * @param upperThresh the lowerThresh of the number of outstanding tuples pending in this bolt
-   * before "backpressure" is released
    * @param sleepDuration the amount of timeout in the case of "backpressure", important to set to
    * a suitable amount to prevent bolt from overwhelming outstream, especially for simple and fast
    * execute logic
    * @return use the returned object to declare the inputs to this component
    */
   public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism,
-                              int numtds, boolean debug, int upperThresh, int lowerThresh,
-                              int sleepDuration) {
+                              int numtds, boolean debug, int sleepDuration) {
     validateComponentName(id);
 
     int realNumThread = numtds;
@@ -201,8 +197,6 @@ public class TopologyBuilder {
     bolt.setMaxCore(cores);
     bolt.setNumCore(realNumThread);
     bolt.setDebug(debug);
-    bolt.setBackPressureLowerThreshold(lowerThresh);
-    bolt.setBackPressureUpperThreshold(upperThresh);
     bolt.setSleepDuration(sleepDuration);
 
     BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);

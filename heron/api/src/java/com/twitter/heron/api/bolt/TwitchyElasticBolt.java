@@ -22,27 +22,28 @@ import java.util.Random;
 public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IElasticBolt {
   private static final long serialVersionUID = -8986777904209608575L;
   private int twitchyness = 3;
+  private long lastTwitch;
   private int twitchProbability = 3;
+  private long twitchInterval = 10000;
   private Random rng;
 
-  public void initElasticBolt(OutputCollector acollector){
+  public void initElasticBolt(OutputCollector acollector) {
     super.initElasticBolt(acollector);
+    lastTwitch = System.currentTimeMillis();
     rng = new Random();
   }
 
-  private void twitch(){
+  private void twitch() {
     int amt = Math.abs(rng.nextInt(10));
-    if (amt < twitchProbability){ // twitchProbability of twitching
-      amt = Math.abs(Math.max(rng.nextInt()%twitchyness, 1)); // amount to twitch
-      if (rng.nextInt()%2 == 0){     // 50% of the chance to scale up or down
+    if (amt < twitchProbability) { // twitchProbability of twitching
+      amt = Math.abs(Math.max(rng.nextInt() % twitchyness, 1)); // amount to twitch
+      if (rng.nextInt() % 2 == 0) {     // 50% of the chance to scale up or down
         // go up by [0,twitchyness)
         System.out.println("SCALING_UP :: " + amt);
         scaleUp(amt);
-        this.freeze = true;
       } else {
         // go down [0,twitchyness)
         System.out.println("SCALING_DOWN :: " + amt);
-        this.freeze = true;
         scaleDown(amt);
       }
     }
@@ -50,6 +51,10 @@ public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IEla
 
   public final void runBolt() {
     twitch();
+    if ((System.currentTimeMillis() - lastTwitch) > twitchInterval) {
+      twitch();
+      lastTwitch = System.currentTimeMillis();
+    }
     super.runBolt();
   }
 }

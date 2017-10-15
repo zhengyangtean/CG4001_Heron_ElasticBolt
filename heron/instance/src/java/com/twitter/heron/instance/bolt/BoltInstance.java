@@ -170,7 +170,7 @@ public class BoltInstance implements IInstance {
       topologyContext.invokeHookPrepare();
 
       // Pass collector into elasticbolt incase the topology requires the bolt to  emit tuples
-      ((IElasticBolt) bolt).initElasticBolt( boltCollector);
+      ((IElasticBolt) bolt).initElasticBolt(boltCollector);
     } else {
       // Delegate
       bolt.prepare(
@@ -211,23 +211,10 @@ public class BoltInstance implements IInstance {
     Runnable boltTasks = new Runnable() {
       @Override
       public void run() {
-        // Back-pressure -- only when we could send out tuples will we read & execute tuples
-        // check to see if they is any outstanding tuples yet to be sent out
-//        if (bolt instanceof IElasticBolt){
-//          ((IElasticBolt) bolt).checkFreeze(); // status check to check if frozen
-//          ((IElasticBolt) bolt).checkQueue();  // status check to see if they are pending output
-//        }
-
         if (collector.isOutQueuesAvailable()) {
 
-          if (bolt instanceof IElasticBolt) {
-            // only read if there is no backpressure
-            if (!((IElasticBolt) bolt).getBackPressure()){
-              readTuplesAndExecute(streamInQueue);
-            }
-          } else {
-            readTuplesAndExecute(streamInQueue);
-          }
+          readTuplesAndExecute(streamInQueue);
+
           // Though we may execute MAX_READ tuples, finally we will packet it as
           // one outgoingPacket and push to out queues
           collector.sendOutTuples();
@@ -235,7 +222,6 @@ public class BoltInstance implements IInstance {
         } else {
           boltMetrics.updateOutQueueFullCount();
         }
-
         // If there are more to read, we will wake up itself next time when it doWait()
         if (collector.isOutQueuesAvailable() && !streamInQueue.isEmpty()) {
           looper.wakeUp();
@@ -278,6 +264,8 @@ public class BoltInstance implements IInstance {
             stream.getComponentName(), stream.getId()).size();
         int sourceTaskId = tuples.getSrcTaskId();
 
+        boolean boltStarted = false;
+
         if (bolt instanceof IElasticBolt) {
           long startExecuteTuple = System.nanoTime();
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
@@ -291,9 +279,6 @@ public class BoltInstance implements IInstance {
             TupleImpl t = new TupleImpl(topologyContext, stream, dataTuple.getKey(),
                 dataTuple.getRootsList(), values, startExecuteTuple, false, sourceTaskId);
 
-            while (!collector.isOutQueuesAvailable()){
-              Utils.sleep(1);
-            }
             // Load ElasticBolt
             ((IElasticBolt) bolt).loadTuples(t);
 
@@ -308,6 +293,13 @@ public class BoltInstance implements IInstance {
 
             // Update metrics
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
+          }
+
+          ((IElasticBolt) bolt).runBolt();
+
+          int sleepDuration = ((IElasticBolt) bolt).getSleepDuration();
+          while (((IElasticBolt) bolt).getNumOutStanding() > 0){
+            Utils.sleep(sleepDuration);
           }
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
@@ -337,13 +329,6 @@ public class BoltInstance implements IInstance {
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
         }
-
-//        if (bolt instanceof IElasticBolt) {
-//          while (((IElasticBolt) bolt).getFreezeStatus()){
-//            // wait for freeze status to clear up
-//          }
-//        }
-
         // To avoid spending too much time
         long currentTime = System.nanoTime();
         if (currentTime - startOfCycle - instanceExecuteBatchTime.toNanos() > 0) {
@@ -352,9 +337,7 @@ public class BoltInstance implements IInstance {
       }
     }
 
-    if (bolt instanceof IElasticBolt) {
-      ((IElasticBolt) bolt).runBolt(); // execution to be done automatically at bolt level
-    }
+
   }
 
   @Override

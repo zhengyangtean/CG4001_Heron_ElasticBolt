@@ -51,8 +51,6 @@ public interface IElasticBolt extends IRichBolt {
 
   void scaleDown(int cores);
 
-  void checkFreeze();
-
   // for debugging/information
   void setDebug(Boolean debug);
 
@@ -62,13 +60,9 @@ public interface IElasticBolt extends IRichBolt {
 
   int getMaxCore();
 
-  void setBackPressureLowerThreshold(int newValue);
-
-  void setBackPressureUpperThreshold(int newValue);
-
-  boolean getBackPressure();
-
   void setSleepDuration(int newValue);
+
+  int getSleepDuration();
 
   int getNumOutStanding();
 
