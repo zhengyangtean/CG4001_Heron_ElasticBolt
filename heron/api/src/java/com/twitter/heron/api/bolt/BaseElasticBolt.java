@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.twitter.heron.api.topology.BaseComponent;
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
-import com.twitter.heron.api.utils.Utils;
 
 /**
  * Created by zhengyang on 25/6/17.
@@ -60,19 +59,19 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Cores are the number of threads that are running
   private int numCore = -1; // numCore are the number of threads currently being used
   private int maxCore = -1; // maxCore are the number of threads the system has
-  private int backPressureLowerThreshold = 50;
-  private int backPressureUpperThreshold = 150;
   private int sleepDuration = 20;
-  private boolean backPressure = false;
+  private int maxNumBatches = 1;
+  private int currentBatch = 0;
+  protected HashMap<String, BaseKeyLoadTuple> currentDistinctKeys = new HashMap<>();
 
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
    * LinkedList as the internal queue due to its better add/remove performance
    **/
   // Serves as the the single point of entry of in-buffer for this elastibolt
-  private LinkedList<Tuple> inQueue; // LL due to its high add and remove frequency
+  protected LinkedList<Tuple> inQueue; // LL due to its high add and remove frequency
   // Serves as the map of queue to feed tuples into various threads
-  private ArrayList<LinkedList<Tuple>> queueArray;
+  protected ArrayList<LinkedList<Tuple>> queueArray;
   // Keeps track of the threads in this ElasticBolt
   private ArrayList<BaseElasthread> threadArray;
 
@@ -86,8 +85,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   /**
    * Various data structure to keep track of the load for sharding and scaling purpose
    */
-  private HashMap<String, AtomicInteger> keyCountMap;
-  private HashMap<String, Integer> keyThreadMap;
+  protected HashMap<String, AtomicInteger> keyCountMap;
+  protected HashMap<String, Integer> keyThreadMap;
   private ArrayList<AtomicInteger> loadArray;
   private AtomicInteger outstandingTuples;
   public boolean debug = false;
@@ -118,6 +117,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void runBolt() {
+    shardTuples();
+    currentDistinctKeys.clear();
     for (int i = 0; i < numCore; i++) {
       // for each of the "core" assigned which is represented by a thread, we check its queue to
       // see if it is empty, if its not empty, and thread
@@ -128,18 +129,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         }
         threadArray.get(i).start();
       }
-    }
-    if (debug) {
-      checkQueue();
-    }
-  }
-  // emit tuples if the output queue is not empty
-  // done by boltinstance before runbolt
-  public synchronized void checkQueue() {
-    // debug to print state if last check is > 15 second
-    if (debug && System.currentTimeMillis() - latency > 15000) {
-      printStateMap();
-      latency = System.currentTimeMillis();
     }
   }
 
@@ -167,19 +156,57 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     this.debug = debug;
   }
 
+  // assumes that the first value of the tuple is a string and is the key of the tuple
   public synchronized void loadTuples(Tuple t) {
     inQueue.add(t);
-    shardTuples();
+    if (currentDistinctKeys.containsKey(t.getString(0))){
+      BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0),
+          currentDistinctKeys.get(t.getString(0)).getV());
+      currentDistinctKeys.put(t.getString(0), tuple);
+
+    } else {
+      BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0), 1);
+      currentDistinctKeys.put(t.getString(0), tuple);
+    }
     outstandingTuples.incrementAndGet();
   }
 
-  public synchronized void updateState(String tuple, Integer number) {
-    if (stateMap.get(tuple) == null) {
-      stateMap.put(tuple, number);
+  protected int getNumDistinctKeys() {
+    return currentDistinctKeys.size();
+  }
+
+  public synchronized int incrementAndGetState(String key, int number) {
+    if (stateMap.get(key) == null) {
+      stateMap.put(key, number);
+      return number;
     } else {
-      int amount = stateMap.get(tuple);
-      stateMap.put(tuple, amount + number);
+      int amount = stateMap.get(key);
+      stateMap.put(key, amount + number);
+      return amount + number;
     }
+  }
+
+  public synchronized void putState(String key, int value) {
+    stateMap.put(key, value);
+  }
+
+  public synchronized int getState(String key) {
+    return stateMap.get(key);
+  }
+
+  public synchronized int getState(String key, int defaultValue) {
+    if (stateMap.get(key) == null) {
+      return defaultValue;
+    }
+    return stateMap.get(key);
+  }
+
+  public ConcurrentHashMap<String, Integer> getStateMap() {
+    return stateMap;
+  }
+
+  public void setStateMap(ConcurrentHashMap<String, Integer> map) {
+    this.stateMap = map;
   }
 
   public synchronized void updateLoadBalancer(String key) {
@@ -193,6 +220,23 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       keyCountMap.remove(key); // remove the mapping for key-tuplesleft
       keyThreadMap.remove(key); // remove the mapping for key-node
     }
+  }
+
+  public void setMaxNumBatches(int numBatch) {
+    this.maxNumBatches = numBatch;
+  }
+
+  public int getMaxNumBatches() {
+    return maxNumBatches;
+  }
+
+  public int incrementAndGetNumBatch() {
+    currentBatch += 1;
+    return currentBatch;
+  }
+
+  public void resetNumBatch() {
+    currentBatch = 0;
   }
 
   public void scaleUp(int cores) {
@@ -222,7 +266,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     return leastLoadedNode;
   }
 
-  private void shardTuples() {
+  protected void shardTuples() {
     // shard tuples into their thread queues if system is not frozen for migration
     while (!inQueue.isEmpty()) {
       Tuple t = inQueue.poll();

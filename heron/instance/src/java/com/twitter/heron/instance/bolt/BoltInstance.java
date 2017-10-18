@@ -241,6 +241,12 @@ public class BoltInstance implements IInstance {
     long startOfCycle = System.nanoTime();
     // Read data from in Queues
 
+    if (inQueue.isEmpty()) {
+      if (bolt instanceof IElasticBolt) {
+        ((IElasticBolt) bolt).runBolt();
+      }
+    }
+
     while (!inQueue.isEmpty()) {
       Message msg = inQueue.poll();
 
@@ -263,8 +269,6 @@ public class BoltInstance implements IInstance {
         int nValues = topologyContext.getComponentOutputFields(
             stream.getComponentName(), stream.getId()).size();
         int sourceTaskId = tuples.getSrcTaskId();
-
-        boolean boltStarted = false;
 
         if (bolt instanceof IElasticBolt) {
           long startExecuteTuple = System.nanoTime();
@@ -295,12 +299,17 @@ public class BoltInstance implements IInstance {
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
 
-          ((IElasticBolt) bolt).runBolt();
-
-          int sleepDuration = ((IElasticBolt) bolt).getSleepDuration();
-          while (((IElasticBolt) bolt).getNumOutStanding() > 0){
-            Utils.sleep(sleepDuration);
+          // allow a user configurable number of batches to be preloaded
+          if (((IElasticBolt) bolt).incrementAndGetNumBatch() ==
+              ((IElasticBolt) bolt).getMaxNumBatches()){
+            ((IElasticBolt) bolt).runBolt();
+            int sleepDuration = ((IElasticBolt) bolt).getSleepDuration();
+            while (((IElasticBolt) bolt).getNumOutStanding() > 0){
+              Utils.sleep(sleepDuration);
+            }
+            ((IElasticBolt) bolt).resetNumBatch();
           }
+
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
             long startExecuteTuple = System.nanoTime();
