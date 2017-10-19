@@ -163,7 +163,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
       BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0),
           currentDistinctKeys.get(t.getString(0)).getV());
       currentDistinctKeys.put(t.getString(0), tuple);
-
     } else {
       BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0), 1);
       currentDistinctKeys.put(t.getString(0), tuple);

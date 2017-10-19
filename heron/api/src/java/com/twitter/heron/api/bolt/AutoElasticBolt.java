@@ -31,25 +31,26 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     // get the number of distinct keys for this iteration
     int numKey = getNumDistinctKeys();
     // get what is the max number of cores available is a min of (user definition , system resource)
-    int numCore = Math.min(this.getNumCore(), this.getMaxCore());
     int newNumberOfCores = 0;
     int delta = 0;
     // assumes a reasonable number of cores  < 100, brute-forcing to see what is the max number of
     // cores that divides the number of keys
-    for (int i = numCore ; i > 0 ; i++) {
+    for (int i = getMaxCore() ; i > 0 ; i--) {
       // stop once we found a match
-      if (numKey % numCore == 0) {
+      if (numKey % i == 0) {
         newNumberOfCores = i;
         break;
       }
     }
+
     // in the case which its not divisible, we default to max number of cores allowed
     if (newNumberOfCores == 0) {
-      newNumberOfCores = numCore;
+      newNumberOfCores = getMaxCore();
     }
 
     // calculate the number of cores to scale up or down
     delta = this.getNumCore() - newNumberOfCores;
+
     if (delta < 0) {
       scaleUp(Math.abs(delta));
     } else if (delta > 0) {
