@@ -71,6 +71,8 @@ public interface IElasticBolt extends IRichBolt {
 
   int getState(String tuple, int defaultValue);
 
+  int getNumDistinctKeys();
+
   void putState(String tuple, int value);
 
   ConcurrentHashMap<String, Integer> getStateMap();

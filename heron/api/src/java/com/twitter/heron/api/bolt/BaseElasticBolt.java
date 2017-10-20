@@ -159,7 +159,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // assumes that the first value of the tuple is a string and is the key of the tuple
   public synchronized void loadTuples(Tuple t) {
     inQueue.add(t);
-    if (currentDistinctKeys.containsKey(t.getString(0))){
+    if (currentDistinctKeys.containsKey(t.getString(0))) {
       BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0),
           currentDistinctKeys.get(t.getString(0)).getV());
       currentDistinctKeys.put(t.getString(0), tuple);
@@ -170,7 +170,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     outstandingTuples.incrementAndGet();
   }
 
-  protected int getNumDistinctKeys() {
+  public int getNumDistinctKeys() {
     return currentDistinctKeys.size();
   }
 

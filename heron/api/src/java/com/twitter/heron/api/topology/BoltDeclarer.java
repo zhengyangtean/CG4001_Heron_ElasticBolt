@@ -20,7 +20,6 @@ import java.util.Map;
 
 import com.google.protobuf.ByteString;
 
-import com.twitter.heron.api.bolt.IElasticBolt;
 import com.twitter.heron.api.bolt.IRichBolt;
 import com.twitter.heron.api.generated.TopologyAPI;
 import com.twitter.heron.api.grouping.CustomStreamGrouping;

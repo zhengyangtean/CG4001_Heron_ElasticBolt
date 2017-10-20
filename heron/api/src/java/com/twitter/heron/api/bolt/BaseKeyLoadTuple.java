@@ -38,8 +38,7 @@ public class BaseKeyLoadTuple implements Comparable<BaseKeyLoadTuple> {
   public int compareTo(BaseKeyLoadTuple t) {
     if (this.v < t.v) {
       return -1;
-    }
-    else if(this.v > t.v){
+    } else if (this.v > t.v) {
       return 1;
     }
     return 0;

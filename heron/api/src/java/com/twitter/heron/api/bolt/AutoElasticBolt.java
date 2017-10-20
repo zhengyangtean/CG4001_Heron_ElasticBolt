@@ -35,7 +35,7 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     int delta = 0;
     // assumes a reasonable number of cores  < 100, brute-forcing to see what is the max number of
     // cores that divides the number of keys
-    for (int i = getMaxCore() ; i > 0 ; i--) {
+    for (int i = getMaxCore(); i > 0; i--) {
       // stop once we found a match
       if (numKey % i == 0) {
         newNumberOfCores = i;
