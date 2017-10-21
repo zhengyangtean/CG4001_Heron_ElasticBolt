@@ -54,7 +54,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private static final long serialVersionUID = 4309732999277305080L;
 
   private OutputCollector boltCollector;
-  private long latency = System.currentTimeMillis();
+  public long lastStartTime = System.currentTimeMillis();
 
   // Cores are the number of threads that are running
   private int numCore = -1; // numCore are the number of threads currently being used
@@ -62,7 +62,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private int sleepDuration = 20;
   private int maxNumBatches = 1;
   private int currentBatch = 0;
-  protected HashMap<String, BaseKeyLoadTuple> currentDistinctKeys = new HashMap<>();
+  public HashMap<String, BaseKeyLoadTuple> currentDistinctKeys = new HashMap<>();
 
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
@@ -117,6 +117,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   public void runBolt() {
+    runBoltHook();
+    lastStartTime = System.currentTimeMillis();
     shardTuples();
     currentDistinctKeys.clear();
     for (int i = 0; i < numCore; i++) {
@@ -306,6 +308,10 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     return this.sleepDuration;
   }
 
+  public int getNumWorkingKeys() {
+    return this.keyCountMap.size();
+  }
+
   @Override
   public void cleanup() {
   }
@@ -321,5 +327,17 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public void setSleepDuration(int newValue) {
     this.sleepDuration = newValue;
   }
+
+  public void runBoltHook(){}
+
+
+  public void test(){
+    incrementAndGetState("", 5);
+    putState("", 5);
+    setStateMap(getStateMap());
+    setStateMap(new HashMap<String, Integer>());
+  }
 }
+
+
 
