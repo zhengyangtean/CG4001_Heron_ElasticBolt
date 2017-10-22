@@ -63,7 +63,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private int sleepDuration = 20;
   private int maxNumBatches = 1;
   private int currentBatch = 0;
-  public HashMap<String, BaseKeyLoadTuple> currentDistinctKeys = new HashMap<>();
+  protected HashMap<String, Integer> currentDistinctKeys = new HashMap<>();
 
   /**
    * ArrayList as the external list of the number of queues are constant (added only at init)
@@ -163,12 +163,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   public synchronized void loadTuples(Tuple t) {
     inQueue.add(t);
     if (currentDistinctKeys.containsKey(t.getString(0))) {
-      BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0),
-          currentDistinctKeys.get(t.getString(0)).getV());
-      currentDistinctKeys.put(t.getString(0), tuple);
+      currentDistinctKeys.put(t.getString(0), currentDistinctKeys.get(t.getString(0)) + 1);
     } else {
-      BaseKeyLoadTuple tuple = new BaseKeyLoadTuple(t.getString(0), 1);
-      currentDistinctKeys.put(t.getString(0), tuple);
+      currentDistinctKeys.put(t.getString(0), 1);
     }
     outstandingTuples.incrementAndGet();
   }
