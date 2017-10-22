@@ -15,7 +15,7 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.LinkedList;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.twitter.heron.api.tuple.Tuple;
 import com.twitter.heron.api.tuple.Values;
@@ -86,9 +86,9 @@ public interface IElasticBolt extends IRichBolt {
 
   void putState(String tuple, int value);
 
-  Map<String, Integer> getStateMap();
+  ConcurrentHashMap<String, Integer> getStateMap();
 
-  void setStateMap(Map<String, Integer> map);
+  void setStateMap(ConcurrentHashMap<String, Integer> map);
 
   void setMaxNumBatches(int numBatch);
 
@@ -97,6 +97,8 @@ public interface IElasticBolt extends IRichBolt {
   int incrementAndGetNumBatch();
 
   int getNumWorkingKeys();
+
+  void setUserDefinedMaxCore(int cores);
 
   void resetNumBatch();
 }

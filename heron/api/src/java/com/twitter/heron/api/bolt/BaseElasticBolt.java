@@ -59,6 +59,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Cores are the number of threads that are running
   private int numCore = -1; // numCore are the number of threads currently being used
   private int maxCore = -1; // maxCore are the number of threads the system has
+  private int userDefinedMaxCore = -1;
   private int sleepDuration = 20;
   private int maxNumBatches = 1;
   private int currentBatch = 0;
@@ -312,6 +313,14 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     return this.keyCountMap.size();
   }
 
+  public int getUserDefinedMaxCore() {
+    return userDefinedMaxCore;
+  }
+
+  public void setUserDefinedMaxCore(int cores) {
+    userDefinedMaxCore = cores;
+  }
+
   @Override
   public void cleanup() {
   }
@@ -330,13 +339,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
 
   public void runBoltHook(){}
 
-
-  public void test(){
-    incrementAndGetState("", 5);
-    putState("", 5);
-    setStateMap(getStateMap());
-    setStateMap(new HashMap<String, Integer>());
-  }
 }
 
 

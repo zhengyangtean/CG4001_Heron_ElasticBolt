@@ -196,6 +196,7 @@ public class TopologyBuilder {
     }
     bolt.setMaxCore(cores);
     bolt.setNumCore(realNumThread);
+    bolt.setUserDefinedMaxCore(realNumThread);
     bolt.setDebug(debug);
     bolt.setSleepDuration(sleepDuration);
 
@@ -217,6 +218,7 @@ public class TopologyBuilder {
     }
     bolt.setMaxCore(cores);
     bolt.setNumCore(realNumThread);
+    bolt.setUserDefinedMaxCore(realNumThread);
     bolt.setDebug(debug);
     bolt.setSleepDuration(sleepDuration);
     bolt.setMaxNumBatches(numBatchesPerRun);

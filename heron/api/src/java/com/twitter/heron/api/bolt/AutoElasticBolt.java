@@ -35,7 +35,7 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     int delta = 0;
     // assumes a reasonable number of cores  < 100, brute-forcing to see what is the max number of
     // cores that divides the number of keys
-    for (int i = getMaxCore(); i > 0; i--) {
+    for (int i = getUserDefinedMaxCore(); i > 1; i--) {
       // stop once we found a match
       if (numKey % i == 0) {
         newNumberOfCores = i;
@@ -45,11 +45,13 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
 
     // in the case which its not divisible, we default to max number of cores allowed
     if (newNumberOfCores == 0) {
-      newNumberOfCores = getMaxCore();
+      newNumberOfCores = getUserDefinedMaxCore();
     }
 
     // calculate the number of cores to scale up or down
     delta = this.getNumCore() - newNumberOfCores;
+
+    System.out.println(newNumberOfCores + "|" + this.getNumCore() + "|" + delta);
 
     if (delta < 0) {
       scaleUp(Math.abs(delta));
