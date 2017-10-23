@@ -36,7 +36,7 @@ public abstract class DFFElasticBolt extends BaseElasticBolt implements IElastic
 
     // initialize core capacity to target capacity
     ArrayList<Integer> coreCapacity = new ArrayList<>(getNumCore());
-    for (int i = 0; i < getNumCore(); i++){
+    for (int i = 0; i < getNumCore(); i++) {
       coreCapacity.add(targetCapacity);
     }
 

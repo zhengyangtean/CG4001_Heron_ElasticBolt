@@ -185,6 +185,17 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
+  public synchronized int decrementAndGetState(String key, int number) {
+    if (stateMap.get(key) == null) {
+      stateMap.put(key, number);
+      return number;
+    } else {
+      int amount = stateMap.get(key);
+      stateMap.put(key, amount - number);
+      return amount + number;
+    }
+  }
+
   public synchronized void putState(String key, int value) {
     stateMap.put(key, value);
   }
@@ -334,7 +345,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     this.sleepDuration = newValue;
   }
 
-  public void runBoltHook(){}
+  public void runBoltHook() {}
 
 }
 

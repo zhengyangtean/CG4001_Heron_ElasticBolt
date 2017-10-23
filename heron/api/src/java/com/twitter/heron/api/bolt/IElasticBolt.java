@@ -75,6 +75,7 @@ public interface IElasticBolt extends IRichBolt {
 
   void printStateMap();
 
+  int decrementAndGetState(String tuple, int number);
 
   int incrementAndGetState(String tuple, int number);
 
@@ -82,13 +83,13 @@ public interface IElasticBolt extends IRichBolt {
 
   int getState(String tuple, int defaultValue);
 
-  int getNumDistinctKeys();
-
   void putState(String tuple, int value);
 
   ConcurrentHashMap<String, Integer> getStateMap();
 
   void setStateMap(ConcurrentHashMap<String, Integer> map);
+
+  int getNumDistinctKeys();
 
   void setMaxNumBatches(int numBatch);
 
