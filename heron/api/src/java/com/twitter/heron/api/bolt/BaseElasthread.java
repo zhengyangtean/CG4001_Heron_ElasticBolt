@@ -19,9 +19,10 @@ import com.twitter.heron.api.tuple.Tuple;
 
 /**
  * Created by zhengyang on 8/8/17.
+ * Implementation of threads for ElasticBolt
  */
 public class BaseElasthread implements IElasthread {
-  private Thread t;
+  private Thread thisThread;
   private String threadName;
   private final IElasticBolt parentBolt;
 
@@ -37,13 +38,13 @@ public class BaseElasthread implements IElasthread {
       parentBolt.execute(nextTuple);
       parentBolt.updateLoadBalancer(nextTuple.getString(0));
     }
-    t = null;
+    thisThread = null;
   }
 
   public void start() {
-    if (t == null) {
-      t = new Thread(this, threadName);
-      t.start();
+    if (thisThread == null) {
+      thisThread = new Thread(this, threadName);
+      thisThread.start();
     }
   }
 }

@@ -15,6 +15,7 @@ package com.twitter.heron.api.bolt;
 
 /**
  * Created by zhengyang on 8/8/17.
+ * Interface for thread used by ElasticBolt
  */
 public interface IElasthread extends Runnable {
 
