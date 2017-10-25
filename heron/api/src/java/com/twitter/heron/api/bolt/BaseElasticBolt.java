@@ -345,7 +345,9 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     this.sleepDuration = newValue;
   }
 
-  public void runBoltHook() {}
+  public void runBoltHook() {
+
+  }
 
 }
 

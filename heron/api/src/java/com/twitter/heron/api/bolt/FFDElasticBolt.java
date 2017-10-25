@@ -22,17 +22,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Created by zhengyang on 22/10/17.
  */
-public abstract class DFFElasticBolt extends BaseElasticBolt implements IElasticBolt  {
+public abstract class FFDElasticBolt extends BaseElasticBolt implements IElasticBolt  {
   private static final long serialVersionUID = 2567533972012329000L;
 
   public void runBolt() {
 
     // sort HM to get keys by descending load order
-    HMcomparator HMsorter = new HMcomparator(this.currentDistinctKeys);
-    TreeMap<String, Integer> descendingValueMap = new TreeMap<String, Integer>(HMsorter);
+    HMcomparator hmSorter = new HMcomparator(this.currentDistinctKeys);
+    TreeMap<String, Integer> descendingValueMap = new TreeMap<String, Integer>(hmSorter);
 
     // target capacity where all tuples are evenly divided
-    int targetCapacity = (int)(Math.ceil(getNumOutStanding()*1.0/getNumCore()));
+    int targetCapacity = (int) (Math.ceil(getNumOutStanding() * 1.0 / getNumCore()));
 
     // initialize core capacity to target capacity
     ArrayList<Integer> coreCapacity = new ArrayList<>(getNumCore());
@@ -41,13 +41,13 @@ public abstract class DFFElasticBolt extends BaseElasticBolt implements IElastic
     }
 
     // Assign Core using modififed DFF algo
-    for(String key: descendingValueMap.keySet()){
+    for (String key: descendingValueMap.keySet()) {
       boolean added = false;
       int keySize = descendingValueMap.get(key);
       // find to see if can fit into any core
-      for (int i = 0; i < getNumCore(); i++){
+      for (int i = 0; i < getNumCore(); i++) {
         if (coreCapacity.get(i) > keySize) {
-          coreCapacity.set(i, coreCapacity.get(i)-keySize);
+          coreCapacity.set(i, coreCapacity.get(i) - keySize);
           keyThreadMap.put(key, i);
           keyCountMap.put(key, new AtomicInteger(1));
           added = true;
@@ -55,9 +55,9 @@ public abstract class DFFElasticBolt extends BaseElasticBolt implements IElastic
         }
       }
       // if cant fit into any core, find the least loaded/used core and assign it to the core
-      if (!added){
+      if (!added) {
         int maxCapacityCore = getMaxCapacityCore(coreCapacity);
-        coreCapacity.set(maxCapacityCore, coreCapacity.get(maxCapacityCore)-keySize);
+        coreCapacity.set(maxCapacityCore, coreCapacity.get(maxCapacityCore) - keySize);
         keyThreadMap.put(key, maxCapacityCore);
         keyCountMap.put(key, new AtomicInteger(0));
       }
@@ -71,7 +71,7 @@ public abstract class DFFElasticBolt extends BaseElasticBolt implements IElastic
     int maxCapacity = coreCapacity.get(0);
     int maxCapacityCore = 0;
     int capacity;
-    for (int i = 1 ; i < coreCapacity.size(); i++){
+    for (int i = 1; i < coreCapacity.size(); i++) {
       capacity = coreCapacity.get(i);
       if (capacity > maxCapacity) {
         maxCapacityCore = i;
@@ -82,9 +82,9 @@ public abstract class DFFElasticBolt extends BaseElasticBolt implements IElastic
   }
 
   class HMcomparator implements Comparator<String> {
-    Map<String, Integer> originalMap;
+    private Map<String, Integer> originalMap;
 
-    public HMcomparator(Map<String, Integer> originalMap) {
+    HMcomparator(Map<String, Integer> originalMap) {
       this.originalMap = originalMap;
     }
 
@@ -96,7 +96,6 @@ public abstract class DFFElasticBolt extends BaseElasticBolt implements IElastic
       }
     }
   }
-
 }
 
 
