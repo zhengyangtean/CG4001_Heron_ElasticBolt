@@ -142,6 +142,7 @@ public class TopologyBuilder {
     }
     bolt.setMaxCore(cores);
     bolt.setNumCore(realNumThread);
+    bolt.setUserDefinedNumCore(realNumThread);
 
     BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
     bolts.put(id, b);
@@ -161,6 +162,7 @@ public class TopologyBuilder {
     }
     bolt.setMaxCore(cores);
     bolt.setNumCore(realNumThread);
+    bolt.setUserDefinedNumCore(realNumThread);
     bolt.setDebug(debug);
 
     BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);

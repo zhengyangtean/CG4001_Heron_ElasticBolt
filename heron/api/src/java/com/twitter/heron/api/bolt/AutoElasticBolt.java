@@ -33,7 +33,7 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     int delta = 0;
     int bestRuns = Integer.MAX_VALUE;
     // find the core minimal number of runs required to finish processing data
-    for (int i = getUserDefinedNumCore(); i > 1; i--) {
+    for (int i = 1; i <= getUserDefinedNumCore(); i++) {
       // stop once we found a match
 
       int numRuns = numKey / i;
