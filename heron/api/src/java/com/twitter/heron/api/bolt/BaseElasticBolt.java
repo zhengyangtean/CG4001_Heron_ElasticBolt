@@ -14,7 +14,6 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,89 +25,72 @@ import com.twitter.heron.api.tuple.Values;
 
 /**
  * Created by zhengyang on 25/6/17.
- * Assumptions made
- * > key for the state are strings and the values and integers
- * > Tuple have key String at index 0, ie. tuple.getString(0) returns the tuple's key
- * > unbounded stream of incoming tuples from upstream bolt/sprout
- *
- * The advantage of using an ElasticBolt is that it
- * 1. reduces the overhead of resources needed to otherwise create other heron instance to host
- * the duplicated bolts
- * 2. ElasticBolts are also elastic in the sense that it has the ability to scale up and down
- * the number of threads, hence cores which are used to process tuples without disrupting the
- * processing of tuples, in a regular bolt, one would need to run the heron update command which
- * temporarily halts processing of tuples. Which is disruptive to tuple processing
- * this is less responsive to the change as compared to ElasticBolt which has an API exposed to
- * allow the user to remotely scale up or down a bolt without halting tuple processing
- * 3. ElasticBolts are also tunable, using the upperThresh, upperThresh and sleepDuration the user
- * can choose to to make the bolt faster and more aggressive, to be able to have higher throughput
- *
- * However it is noteworthy that it is possible for the Elasticbolt to process the tuples so fast
- * and emit it such that it overwhelm the collector's output queue which will then crash the
- * bolt, it is advisable for the user to test experiment with their typical workload and
- * tune Elasticbolt accordingly to maximize speed yet at the same time not overloading the output
- * if we remove the check in the bolt instance to block
+ * The advantage of using an ElasticBolt:
+ * 1. Dynamically scalable Bolt
+ * 2. Avoids costly synchronisation upon keyspace repartitioning
+ * 3. Reduces overhead of parallel Bolts on same container
+ * 4. Compatible with field grouping
  */
-
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
-  private static final long serialVersionUID = 4309732999277305080L;
-
+  private static final long serialVersionUID = 1643680957503810571L;
   private OutputCollector boltCollector;
-  public long lastStartTime = System.currentTimeMillis();
 
-  // Cores are the number of threads that are running
-  private int numCore = -1; // numCore are the number of threads currently being used
-  private int maxCore = -1; // maxCore are the number of threads the system has
-  private int userDefinedMaxCore = -1;
-  private int sleepDuration = 20;
-  private int maxNumBatches = 1;
-  private int currentBatch = 0;
-  protected HashMap<String, Integer> currentDistinctKeys = new HashMap<>();
+  private int sleepDuration = 20; // decide the sleep duration during checks by boltinstance
+  private int maxNumBatches = 1;  // decide number of batch to aggregate before executing tuples
+  private int currentPacketNumber = 0; // tracks the number of packet being aggregated
+  private boolean debug = false;   // To decide to print debug lines or not
 
   /**
+   * Cores are the number of threads that are running
+   **/
+  private int numCore = -1; // numCore are the number of threads currently being used
+  private int maxCore = -1; // maxCore are the number of threads the system has
+  private int userDefinedNumCore = -1; // maxCore as defined by user
+
+  /**
+   * Various data structure to keep track of the load for sharding and scaling purpose
    * ArrayList as the external list of the number of queues are constant (added only at init)
    * LinkedList as the internal queue due to its better add/remove performance
+   *
+   * note : pending tuples are tuples that are in inqueue but not sharded yet
    **/
-  // Serves as the the single point of entry of in-buffer for this elastibolt
+  // Serves as the the single point of entry of in-buffer for this elasticbolt
   protected LinkedList<Tuple> inQueue; // LL due to its high add and remove frequency
   // Serves as the map of queue to feed tuples into various threads
   protected ArrayList<LinkedList<Tuple>> queueArray;
   // Keeps track of the threads in this ElasticBolt
   private ArrayList<BaseElasthread> threadArray;
+  // Serve as the in-memory state
+  private ConcurrentHashMap<String, Integer> stateMap;
 
-  /**
-   * As the collector is not threadsafe, this concurrent queue is
-   * meant to join all the tuple outputs from various threads into a single threaded queue for the
-   * queue to process
-   **/
-  private ConcurrentHashMap<String, Integer> stateMap; // Serve as the inmemorystate
-
-  /**
-   * Various data structure to keep track of the load for sharding and scaling purpose
-   */
+  // Map key to number of tuples that is yet to be processed
   protected HashMap<String, AtomicInteger> keyCountMap;
+  // Map key to which thread it is currently assigned to
   protected HashMap<String, Integer> keyThreadMap;
+  // Map number of keys assigned to each node (index)
   private ArrayList<AtomicInteger> loadArray;
+  // Map key to the number of pending tuple with said key
+  protected HashMap<String, Integer> pendingKeyCountMap = new HashMap<>();
+  // Total number of tuples that is still within the Bolt
   private AtomicInteger outstandingTuples;
-  public boolean debug = false;
 
   /**
    * Initialize the Elasticbolt with the required data structures and threads
    * based on the topology
-   *
-   * @param aCollector The acollector is the OutputCollector used by this bolt to emit tuples
+   * <p>
+   * @param boltCollector The acollector is the OutputCollector used by this bolt to emit tuples
    * downstream
-   *
    */
-  public void initElasticBolt(OutputCollector aCollector) {
-    this.boltCollector = aCollector;
+  public void initElasticBolt(OutputCollector boltCollector) {
+    this.boltCollector = boltCollector;
+    // initialize data structures
     queueArray = new ArrayList<>();
     threadArray = new ArrayList<>();
     loadArray = new ArrayList<>();
     inQueue = new LinkedList<>();
-    stateMap = new ConcurrentHashMap<>();
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
+    stateMap = new ConcurrentHashMap<>();
     outstandingTuples = new AtomicInteger(0);
     for (int i = 0; i < this.maxCore; i++) {
       queueArray.add(new LinkedList<>());
@@ -117,11 +99,12 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
+  /**
+   * Ingress for boltInstance to call to start processing tuples after collecting sufficient tuples
+   */
   public void runBolt() {
     runBoltHook();
-    lastStartTime = System.currentTimeMillis();
     shardTuples();
-    currentDistinctKeys.clear();
     for (int i = 0; i < numCore; i++) {
       // for each of the "core" assigned which is represented by a thread, we check its queue to
       // see if it is empty, if its not empty, and thread
@@ -135,90 +118,79 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
-  public LinkedList<Tuple> getQueue(int i) {
-    return queueArray.get(i);
+  /**
+   * Allow the implementation of IElasticthread to retrieve the queue of tuples which it is
+   * supposed to process
+   * <p>
+   * @param queueIndex the index of which the queue which is being retrieved
+   * @return queue of Tuples for processing
+   */
+  public LinkedList<Tuple> getQueue(int queueIndex) {
+    return queueArray.get(queueIndex);
   }
 
+  /**
+   * Query number of cores which are assigned tuples to process
+   * <p>
+   * @return  the number of cores
+   */
   public int getNumCore() {
     return numCore;
   }
 
+  /**
+   * Set the number of cores which are assigned tuples to process
+   * <p>
+   * @param numCore the index of which the queue which is being retrieved
+   */
   public void setNumCore(int numCore) {
     this.numCore = numCore;
   }
 
-  public void setMaxCore(int maxCore) {
-    this.maxCore = maxCore;
-  }
-
+  /**
+   * Query max number of cores which can be assigned to process tuples
+   * <p>
+   * @return  the maximum number of cores based on current system
+   */
   public int getMaxCore() {
     return maxCore;
   }
 
-  public void setDebug(Boolean debug) {
-    this.debug = debug;
+  /**
+   * Set the maximum number of cores which can be assigned to process tuples in this topology
+   * based on the number of cores available to Java
+   * <p>
+   * @param maxCore the index of which the queue which is being retrieved
+   */
+  public void setMaxCore(int maxCore) {
+    this.maxCore = maxCore;
   }
 
-  // assumes that the first value of the tuple is a string and is the key of the tuple
-  public synchronized void loadTuples(Tuple t) {
-    inQueue.add(t);
-    if (currentDistinctKeys.containsKey(t.getString(0))) {
-      currentDistinctKeys.put(t.getString(0), currentDistinctKeys.get(t.getString(0)) + 1);
+
+
+  /**
+   * Allow boltInstance to enqueue tuples from upstream into bolt, pending processing
+   * assumes that the first value of the tuple is a string and is the key of the tuple
+   * <p>
+   * @param tuple to be executed/processed by the bolt
+   */
+  public void loadTuples(Tuple tuple) {
+    inQueue.add(tuple);
+    if (pendingKeyCountMap.containsKey(tuple.getString(0))) {
+      pendingKeyCountMap.put(tuple.getString(0), pendingKeyCountMap.get(tuple.getString(0)) + 1);
     } else {
-      currentDistinctKeys.put(t.getString(0), 1);
+      pendingKeyCountMap.put(tuple.getString(0), 1);
     }
     outstandingTuples.incrementAndGet();
   }
 
-  public int getNumDistinctKeys() {
-    return currentDistinctKeys.size();
-  }
-
-  public synchronized int incrementAndGetState(String key, int number) {
-    if (stateMap.get(key) == null) {
-      stateMap.put(key, number);
-      return number;
-    } else {
-      int amount = stateMap.get(key);
-      stateMap.put(key, amount + number);
-      return amount + number;
-    }
-  }
-
-  public synchronized int decrementAndGetState(String key, int number) {
-    if (stateMap.get(key) == null) {
-      stateMap.put(key, number);
-      return number;
-    } else {
-      int amount = stateMap.get(key);
-      stateMap.put(key, amount - number);
-      return amount + number;
-    }
-  }
-
-  public synchronized void putState(String key, int value) {
-    stateMap.put(key, value);
-  }
-
-  public synchronized int getState(String key) {
-    return stateMap.get(key);
-  }
-
-  public synchronized int getState(String key, int defaultValue) {
-    if (stateMap.get(key) == null) {
-      return defaultValue;
-    }
-    return stateMap.get(key);
-  }
-
-  public ConcurrentHashMap<String, Integer> getStateMap() {
-    return stateMap;
-  }
-
-  public void setStateMap(ConcurrentHashMap<String, Integer> map) {
-    this.stateMap = map;
-  }
-
+  /**
+   * Called from Elasticthread, update ElasticBolt's datastructures that a tuple of given key has
+   * been processed, synchronized due to the multithreade nature of Elasticthread writing to a
+   * single instance of ElasticBolt
+   * <p>
+   * @param key to update
+   */
   public synchronized void updateLoadBalancer(String key) {
     int node = keyThreadMap.get(key);
     int numLeft = keyCountMap.get(key).decrementAndGet();
@@ -232,33 +204,34 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     }
   }
 
-  public void setMaxNumBatches(int numBatch) {
-    this.maxNumBatches = numBatch;
-  }
-
-  public int getMaxNumBatches() {
-    return maxNumBatches;
-  }
-
-  public int incrementAndGetNumBatch() {
-    currentBatch += 1;
-    return currentBatch;
-  }
-
-  public void resetNumBatch() {
-    currentBatch = 0;
-  }
-
+  /**
+   * API for scaling up the number of cores being used
+   * Has sanity check for "negative" increment also checks if Java has sufficient cores
+   * which is stored in maxCore, numCore is bounded by [1, maxCore]
+   * <p>
+   * @param cores number of cores to increase
+   */
   public void scaleUp(int cores) {
     int scale = Math.abs(cores); // sanity check to prevent "negative" scaleup
     this.numCore = Math.min(this.maxCore, this.numCore + scale);
   }
 
+  /**
+   * API for scaling down the number of core being used
+   * Has sanity check for "negative" decrement also checks if Java numCore < 1
+   * numCore is bounded by [1, maxCore]
+   * <p>
+   * @param cores number of cores to increase
+   */
   public void scaleDown(int cores) {
     int scale = Math.abs(cores); // sanity check to prevent "negative" down
     this.numCore = Math.max(1, this.numCore - scale);
   }
 
+  /**
+   * Find the least loaded core in terms of number of keys assigned to core,
+   * which is the default load balancing algorithm
+   */
   private int getLeastLoadedNode() {
     int leastLoadedNode = 0;
     int leastLoad = loadArray.get(0).get();
@@ -270,24 +243,27 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         leastLoad = currentLoad;
       }
     }
-    // initially leastLoadedNode has no load, now it is no longer freeloading as it
-    // is now going to be assigned a key
-    loadArray.get(leastLoadedNode).getAndIncrement();
     return leastLoadedNode;
   }
 
+  /**
+   * Shard all pending tuples into respective core queues for processing
+   */
   protected void shardTuples() {
-    // shard tuples into their thread queues if system is not frozen for migration
     while (!inQueue.isEmpty()) {
       Tuple t = inQueue.poll();
-      if (!debug && t == null) {
-        System.out.println("WARNING :: NULL TUPLE");
-        return;
+      if (t == null) {
+        if (debug) {
+          System.out.println("WARNING :: NULL TUPLE");
+        }
+        continue;
       }
       String key = t.getString(0);
-      if (!debug && key == null) {
-        System.out.println("WARNING :: NULL TUPLE KEY");
-        return;
+      if (key == null) {
+        if (debug) {
+          System.out.println("WARNING :: NULL/INVALID TUPLE KEY");
+        }
+        continue;
       }
       if (keyThreadMap.get(key) != null) { // check if key is already being processed
         queueArray.get(keyThreadMap.get(key)).add(t);
@@ -297,58 +273,238 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
         if (debug) {
           System.out.println("ASSIGNING :: " + key + " <to> " + nextFreeNode);
         }
+        // update tracking datastructures
+        loadArray.get(nextFreeNode).getAndIncrement();
         queueArray.get(nextFreeNode).add(t);
         keyThreadMap.put(key, nextFreeNode);
         keyCountMap.put(key, new AtomicInteger(1));
       }
     }
+    // since tuples are already sharded they are no longer "pending"
+    pendingKeyCountMap.clear();
   }
 
-  // used by the various threads converge and synchroniously load into the output queue
-  public synchronized void loadOutputTuples(Tuple t, Values v) {
-    boltCollector.emit(t, v);
+  /**
+   * Collector is NOT threadsafe
+   * Since we are multithreading the execution of tuples we need to join it before handing back to
+   * boltCollector for emitting to downstream processing (if needed) hence the need
+   * for synchronizing
+   * <p>
+   * @param tuple anchoring tuple
+   * @param value the new value to emit
+   */
+  public synchronized void emitTuple(Tuple tuple, Values value) {
+    boltCollector.emit(tuple, value);
   }
 
-  public void printStateMap() {
-    System.out.println(Collections.singletonList(stateMap));
+  /**
+   * get the number of batches of tuples to aggregate from upstream before processing
+   * <p>
+   * @return  max number of batches to aggregate
+   */
+  public int getMaxNumBatches() {
+    return maxNumBatches;
   }
 
+  /**
+   * Set the number of batches of tuples to aggregate from upstream before processing
+   * <p>
+   * @param numBatch number of batches
+   */
+  public void setMaxNumBatches(int numBatch) {
+    this.maxNumBatches = numBatch;
+  }
+
+  /**
+   * increment and track the current batch of tuples being aggregated
+   * <p>
+   * @return the current number of batches aggregated
+   */
+  public int incrementAndGetNumBatch() {
+    currentPacketNumber += 1;
+    return currentPacketNumber;
+  }
+
+  /**
+   * resets the number of batches that have been aggregated
+   * used when we have finish aggregating and started processing tuples
+   */
+  public void resetNumBatch() {
+    currentPacketNumber = 0;
+  }
+
+  /**
+   * Check the amount of time that boltInstance is to sleep while bolt executing tuples before
+   * checking to see if bolt have finish executing tuples
+   * <p>
+   * @return amount of time to sleep
+   */
   public int getSleepDuration() {
     return this.sleepDuration;
   }
 
+  /**
+   * Set the amount of time that boltInstance is to sleep while executing tuples
+   * <p>
+   * @param timeToSleep the amount of time to sleep at one go
+   */
+  public void setSleepDuration(int timeToSleep) {
+    this.sleepDuration = timeToSleep;
+  }
+
+  /**
+   * Get the number of distinct keys of the pending tuples
+   * <p>
+   * @return  number of distinct keys
+   */
+  public int getNumDistinctKeys() {
+    return pendingKeyCountMap.size();
+  }
+
+  /**
+   * Dynamically check the number of outstanding tuples which are still in the process of processing
+   * <p>
+   * @return  number of outstanding tuples
+   */
+  public int getNumOutStanding() {
+    return outstandingTuples.get();
+  }
+
+  /**
+   * Dynamically check the number of outstanding keys which are still in the process of processing
+   * <p>
+   * @return  number of keys still being processed
+   */
   public int getNumWorkingKeys() {
     return this.keyCountMap.size();
   }
 
-  public int getUserDefinedMaxCore() {
-    return userDefinedMaxCore;
+  /**
+   * Get the numCore set by the user
+   * <p>
+   * @return  numCore set by the user
+   */
+  public int getUserDefinedNumCore() {
+    return userDefinedNumCore;
   }
 
-  public void setUserDefinedMaxCore(int cores) {
-    userDefinedMaxCore = cores;
+  /**
+   * Set the numCore set by the user
+   * <p>
+   * @param cores set by user
+   */
+  public void setUserDefinedNumCore(int cores) {
+    userDefinedNumCore = cores;
+  }
+
+  /**
+   * Hook to run function before runBolt, to be overwritten by child classes
+   */
+  public void runBoltHook() {
+
+  }
+
+  /**
+   * Set whether to should the bolt run in debug mode
+   * <p>
+   * @param debug should debug actions like printing be performed
+   */
+  public void setDebug(Boolean debug) {
+    this.debug = debug;
+  }
+
+  /**
+   * Built in state to allow users to easily use state, majority of them are synchronized for
+   * concurrency reason due to the multithreaded nature of ElasticBolt
+   */
+
+  /**
+   * Increment the state of the key by amountToIncrease
+   * <p>
+   * @param key key to increment
+   * @param amountToIncrease
+   */
+  public synchronized int incrementAndGetState(String key, int amountToIncrease) {
+    if (stateMap.get(key) == null) {
+      stateMap.put(key, amountToIncrease);
+      return amountToIncrease;
+    } else {
+      int amount = stateMap.get(key);
+      stateMap.put(key, amount + amountToIncrease);
+      return amount + amountToIncrease;
+    }
+  }
+
+  /**
+   * Decrement the state of the key by amountToDecrease
+   * <p>
+   * @param key key to increment
+   * @param amountToDecrease
+   */
+  public synchronized int decrementAndGetState(String key, int amountToDecrease) {
+    if (stateMap.get(key) == null) {
+      stateMap.put(key, amountToDecrease);
+      return amountToDecrease;
+    } else {
+      int amount = stateMap.get(key);
+      stateMap.put(key, amount - amountToDecrease);
+      return amount + amountToDecrease;
+    }
+  }
+
+  /**
+   * get state of key
+   * <p>
+   * @param key
+   */
+  public synchronized int getState(String key) {
+    return stateMap.get(key);
+  }
+
+  /**
+   * get state of key
+   * <p>
+   * @param key
+   * @param defaultValue value to default to if key is not found in state maps
+   */
+  public synchronized int getState(String key, int defaultValue) {
+    if (stateMap.get(key) == null) {
+      return defaultValue;
+    }
+    return stateMap.get(key);
+  }
+
+  /**
+   * write state of the key by amountToDecrease
+   * <p>
+   * @param key key to increment
+   * @param value
+   */
+  public synchronized void putState(String key, int value) {
+    stateMap.put(key, value);
+  }
+
+  /**
+   * Allows retrieval of the current state
+   * <p>
+   * @return the state map
+   */
+  public ConcurrentHashMap<String, Integer> getStateMap() {
+    return stateMap;
+  }
+
+  /**
+   * Allows overwriting of the current state
+   * <p>
+   * @param map to overwrite current state map
+   */
+  public void setStateMap(ConcurrentHashMap<String, Integer> map) {
+    this.stateMap = map;
   }
 
   @Override
   public void cleanup() {
   }
-
-  @Override
-  public void execute(Tuple tuple) {
-  }
-
-  public int getNumOutStanding() {
-    return outstandingTuples.get();
-  }
-
-  public void setSleepDuration(int newValue) {
-    this.sleepDuration = newValue;
-  }
-
-  public void runBoltHook() {
-
-  }
-
 }
 
 

@@ -28,7 +28,7 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
   public void runBolt() {
 
     // sort HM to get keys by descending load order
-    HMcomparator hmSorter = new HMcomparator(this.currentDistinctKeys);
+    HMcomparator hmSorter = new HMcomparator(this.pendingKeyCountMap);
     TreeMap<String, Integer> descendingValueMap = new TreeMap<String, Integer>(hmSorter);
 
     // target capacity where all tuples are evenly divided
