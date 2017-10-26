@@ -37,7 +37,7 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
       // stop once we found a match
 
       int numRuns = numKey / i;
-      if (numKey % i != 0){
+      if (numKey % i != 0) {
         numRuns++;
       }
       if (numRuns < bestRuns) {
@@ -54,7 +54,7 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     // calculate the number of cores to scale up or down
     delta = this.getNumCore() - newNumberOfCores;
 
-    if (getDebug()){
+    if (getDebug()) {
       System.out.println(newNumberOfCores + "|" + this.getNumCore() + "|" + delta);
     }
 

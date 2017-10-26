@@ -26,6 +26,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class FFDElasticBolt extends BaseElasticBolt implements IElasticBolt  {
   private static final long serialVersionUID = -2730620454868078925L;
 
+  /**
+   * Extends the original runBolt function of Elasticbolt to step in and assign the keys to
+   * execution queues based on the tuple statistics , calls super.runBolt upon complete assignment
+   */
   public void runBolt() {
 
     // sort HM to get keys by descending load order

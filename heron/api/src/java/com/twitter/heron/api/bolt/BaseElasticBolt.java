@@ -33,7 +33,7 @@ import com.twitter.heron.api.tuple.Values;
  */
 public abstract class BaseElasticBolt extends BaseComponent implements IElasticBolt {
   private static final long serialVersionUID = 1643680957503810571L;
-  private OutputCollector boltCollector;
+  private OutputCollector collector;
 
   private int sleepDuration = 20; // decide the sleep duration during checks by boltinstance
   private int maxNumBatches = 1;  // decide number of batch to aggregate before executing tuples
@@ -82,7 +82,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * downstream
    */
   public void initElasticBolt(OutputCollector boltCollector) {
-    this.boltCollector = boltCollector;
+    this.collector = boltCollector;
     // initialize data structures
     queueArray = new ArrayList<>();
     threadArray = new ArrayList<>();
@@ -294,7 +294,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * @param value the new value to emit
    */
   public synchronized void emitTuple(Tuple tuple, Values value) {
-    boltCollector.emit(tuple, value);
+    collector.emit(tuple, value);
   }
 
   /**
@@ -383,7 +383,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    *  Get the pendingKeyCountMap
    *  @return keyCountMap
    */
-  protected HashMap<String, Integer> getPendingKeyCountMap(){
+  protected HashMap<String, Integer> getPendingKeyCountMap() {
     return this.pendingKeyCountMap;
   }
 
@@ -391,7 +391,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    *  Get the keyCount map
    *  @return keyCountMap
    */
-  protected HashMap<String, AtomicInteger> getKeyCountMap(){
+  protected HashMap<String, AtomicInteger> getKeyCountMap() {
     return this.keyCountMap;
   }
 
@@ -399,7 +399,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    *  Get the keyThread map
    *  @return keyCountMap
    */
-  protected HashMap<String, Integer> getKeyThreadMap(){
+  protected HashMap<String, Integer> getKeyThreadMap() {
     return this.keyThreadMap;
   }
 
