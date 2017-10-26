@@ -17,15 +17,13 @@ package com.twitter.heron.api.bolt;
  * Created by zhengyang on 18/10/17.
  */
 public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasticBolt  {
-  private static final long serialVersionUID = 5046286258945154824L;
+  private static final long serialVersionUID = 7993201650995318206L;
 
   // Tries to determine what is the optimal number of cores to be used to process the pending data
   // based on the number of keys
-  //
   // Find the max number of available cores that evenly divides the number of keys, if no such value
   // is found, default to the user defined number of cores allowed
-  //
-  // optimal use case is where load is fairly equal amongst keys
+  // optimal use case is where load is equal among keys
 
   public void runBolt() {
     // get the number of distinct keys for this iteration
@@ -33,17 +31,22 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     // get what is the max number of cores available is a min of (user definition , system resource)
     int newNumberOfCores = 0;
     int delta = 0;
-    // assumes a reasonable number of cores  < 100, brute-forcing to see what is the max number of
-    // cores that divides the number of keys
+    int bestRuns = Integer.MAX_VALUE;
+    // find the core minimal number of runs required to finish processing data
     for (int i = getUserDefinedNumCore(); i > 1; i--) {
       // stop once we found a match
-      if (numKey % i == 0) {
+
+      int numRuns = numKey / i;
+      if (numKey % i != 0){
+        numRuns++;
+      }
+      if (numRuns < bestRuns) {
+        bestRuns = numRuns;
         newNumberOfCores = i;
-        break;
       }
     }
 
-    // in the case which its not divisible, we default to max number of cores allowed
+    // Fallback, we default to max number of cores allowed
     if (newNumberOfCores == 0) {
       newNumberOfCores = getUserDefinedNumCore();
     }
@@ -51,7 +54,9 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     // calculate the number of cores to scale up or down
     delta = this.getNumCore() - newNumberOfCores;
 
-    System.out.println(newNumberOfCores + "|" + this.getNumCore() + "|" + delta);
+    if (getDebug()){
+      System.out.println(newNumberOfCores + "|" + this.getNumCore() + "|" + delta);
+    }
 
     if (delta < 0) {
       scaleUp(Math.abs(delta));

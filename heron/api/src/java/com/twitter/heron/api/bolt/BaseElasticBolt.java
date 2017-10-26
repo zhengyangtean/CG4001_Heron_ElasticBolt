@@ -64,13 +64,13 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private ConcurrentHashMap<String, Integer> stateMap;
 
   // Map key to number of tuples that is yet to be processed
-  protected HashMap<String, AtomicInteger> keyCountMap;
+  private HashMap<String, AtomicInteger> keyCountMap;
   // Map key to which thread it is currently assigned to
-  protected HashMap<String, Integer> keyThreadMap;
+  private HashMap<String, Integer> keyThreadMap;
   // Map number of keys assigned to each node (index)
   private ArrayList<AtomicInteger> loadArray;
   // Map key to the number of pending tuple with said key
-  protected HashMap<String, Integer> pendingKeyCountMap = new HashMap<>();
+  private HashMap<String, Integer> pendingKeyCountMap = new HashMap<>();
   // Total number of tuples that is still within the Bolt
   private AtomicInteger outstandingTuples;
 
@@ -380,6 +380,30 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   /**
+   *  Get the pendingKeyCountMap
+   *  @return keyCountMap
+   */
+  protected HashMap<String, Integer> getPendingKeyCountMap(){
+    return this.pendingKeyCountMap;
+  }
+
+  /**
+   *  Get the keyCount map
+   *  @return keyCountMap
+   */
+  protected HashMap<String, AtomicInteger> getKeyCountMap(){
+    return this.keyCountMap;
+  }
+
+  /**
+   *  Get the keyThread map
+   *  @return keyCountMap
+   */
+  protected HashMap<String, Integer> getKeyThreadMap(){
+    return this.keyThreadMap;
+  }
+
+  /**
    * Get the numCore set by the user
    * <p>
    * @return  numCore set by the user
@@ -402,6 +426,15 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    */
   public void runBoltHook() {
 
+  }
+
+  /**
+   * check to see whether to should the bolt run in debug mode
+   * <p>
+   * @return  boolean to see if should do debug actions
+   */
+  public boolean getDebug() {
+    return this.debug;
   }
 
   /**

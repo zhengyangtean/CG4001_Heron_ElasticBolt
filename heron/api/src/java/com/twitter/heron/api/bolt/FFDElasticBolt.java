@@ -15,6 +15,7 @@ package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,12 +24,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by zhengyang on 22/10/17.
  */
 public abstract class FFDElasticBolt extends BaseElasticBolt implements IElasticBolt  {
-  private static final long serialVersionUID = 2567533972012329000L;
+  private static final long serialVersionUID = -2730620454868078925L;
 
   public void runBolt() {
 
     // sort HM to get keys by descending load order
-    HMcomparator hmSorter = new HMcomparator(this.pendingKeyCountMap);
+    HMcomparator hmSorter = new HMcomparator(getPendingKeyCountMap());
     TreeMap<String, Integer> descendingValueMap = new TreeMap<String, Integer>(hmSorter);
 
     // target capacity where all tuples are evenly divided
@@ -39,6 +40,9 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
     for (int i = 0; i < getNumCore(); i++) {
       coreCapacity.add(targetCapacity);
     }
+
+    HashMap<String, Integer> keyThreadMap = getKeyThreadMap();
+    HashMap<String, AtomicInteger> keyCountMap = getKeyCountMap();
 
     // Assign Core using modififed DFF algo
     for (String key: descendingValueMap.keySet()) {

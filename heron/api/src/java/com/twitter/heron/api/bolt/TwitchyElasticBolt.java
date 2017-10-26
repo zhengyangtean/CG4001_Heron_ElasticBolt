@@ -20,7 +20,7 @@ import java.util.Random;
  * Assumptions made is that the key for the state are strings and the values and integers
  */
 public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IElasticBolt {
-  private static final long serialVersionUID = -8986777904209608575L;
+  private static final long serialVersionUID = 5043944225075974673L;
   private int twitchyness = 3;
   private long lastTwitch;
   private int twitchProbability = 3;
@@ -50,7 +50,7 @@ public abstract class TwitchyElasticBolt extends BaseElasticBolt implements IEla
   }
 
   public final void runBolt() {
-    twitch();
+    // twitch every >= twitchInterval
     if ((System.currentTimeMillis() - lastTwitch) > twitchInterval) {
       twitch();
       lastTwitch = System.currentTimeMillis();
