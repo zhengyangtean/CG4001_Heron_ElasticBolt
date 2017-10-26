@@ -159,26 +159,22 @@ public class BoltInstance implements IInstance {
       ((IStatefulComponent<Serializable, Serializable>) bolt).initState(instanceState);
     }
 
+    // handling ELasticbolt
     if (bolt instanceof IElasticBolt) {
       // Delegate
       OutputCollector boltCollector = new OutputCollector(collector);
-
       bolt.prepare(
           topologyContext.getTopologyConfig(), topologyContext, boltCollector);
-
-      // Invoke user-defined prepare task hook
-      topologyContext.invokeHookPrepare();
-
-      // Pass collector into elasticbolt incase the topology requires the bolt to  emit tuples
+      // Pass collector into elasticbolt in case the topology requires the bolt to  emit tuples
       ((IElasticBolt) bolt).initElasticBolt(boltCollector);
     } else {
       // Delegate
       bolt.prepare(
           topologyContext.getTopologyConfig(), topologyContext, new OutputCollector(collector));
-
-      // Invoke user-defined prepare task hook
-      topologyContext.invokeHookPrepare();
     }
+
+    // Invoke user-defined prepare task hook
+    topologyContext.invokeHookPrepare();
 
     // Init the CustomStreamGrouping
     helper.prepareForCustomStreamGrouping();
@@ -239,8 +235,8 @@ public class BoltInstance implements IInstance {
     Duration instanceExecuteBatchTime = systemConfig.getInstanceExecuteBatchTime();
 
     long startOfCycle = System.nanoTime();
-    // Read data from in Queues
 
+    // Read data from in Queues if there is no more incoming tuple no need to wait, just execute
     if (inQueue.isEmpty()) {
       if (bolt instanceof IElasticBolt) {
         ((IElasticBolt) bolt).runBolt();
@@ -275,6 +271,7 @@ public class BoltInstance implements IInstance {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
             // Create the value list and fill the value
             List<Object> values = new ArrayList<>(nValues);
+
             for (int i = 0; i < nValues; i++) {
               values.add(serializer.deserialize(dataTuple.getValues(i).toByteArray()));
             }
@@ -299,17 +296,19 @@ public class BoltInstance implements IInstance {
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
 
-          // allow a user configurable number of batches to be preloaded
+          // check to see if we have aggregated the number of targeted batch, if so runBolt
           if (((IElasticBolt) bolt).incrementAndGetNumBatch() ==
               ((IElasticBolt) bolt).getMaxNumBatches()){
             ((IElasticBolt) bolt).runBolt();
             int sleepDuration = ((IElasticBolt) bolt).getSleepDuration();
+            // boltInstance to wait and periodically (set by user) check
+            // if bolt has finished running
             while (((IElasticBolt) bolt).getNumOutStanding() > 0){
               Utils.sleep(sleepDuration);
             }
+            // finish running, prep for next batch of aggregation
             ((IElasticBolt) bolt).resetNumBatch();
           }
-
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {
             long startExecuteTuple = System.nanoTime();

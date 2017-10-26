@@ -205,6 +205,23 @@ public class TopologyBuilder {
     return b;
   }
 
+  /**
+   * Define a new bolt in this topology. This defines a IElastic bolt, which is a
+   * Potentially faster and more aggressive bolt which preloads all available tuple at once
+   * Using threads to enable concurrent processing of multiple tuples at once within a bolt,*
+   *
+   * @param id the id of this component. This id is referenced by other components that want to
+   * consume this bolt's outputs.
+   * @param bolt bolt which is of IElasticBolt
+   * @param desiredParallelism the number Elasticbolts to be created
+   * @param numtds the initial number of threads per ElasticBolt
+   * @param debug should debug message be shown
+   * @param sleepDuration the amount of timeout in the case of "backpressure", important to set to
+   * a suitable amount to prevent bolt from overwhelming outstream, especially for simple and fast
+   * execute logic
+   * @param numBatchesPerRun the number of batches to aggregate before executing
+   * @return use the returned object to declare the inputs to this component
+   */
   public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism,
                               int numtds, boolean debug, int sleepDuration, int numBatchesPerRun) {
     validateComponentName(id);
@@ -234,7 +251,8 @@ public class TopologyBuilder {
    * for non-aggregation processing and automate the anchoring/acking process to
    * achieve proper reliability in the topology.
    *
-   * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
+   * @param id the id of this component. This id is referenced by other components that want to
+   * consume this bolt's outputs.
    * @param bolt the basic bolt
    * @return use the returned object to declare the inputs to this component
    */
