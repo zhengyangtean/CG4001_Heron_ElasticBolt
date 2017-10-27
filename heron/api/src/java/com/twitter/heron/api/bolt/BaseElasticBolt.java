@@ -70,7 +70,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   // Map number of keys assigned to each node (index)
   private ArrayList<AtomicInteger> loadArray;
   // Map key to the number of pending tuple with said key
-  private HashMap<String, Integer> pendingKeyCountMap = new HashMap<>();
+  private HashMap<String, Integer> pendingKeyCountMap;
   // Total number of tuples that is still within the Bolt
   private AtomicInteger outstandingTuples;
 
@@ -90,6 +90,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
     inQueue = new LinkedList<>();
     keyCountMap = new HashMap<>();
     keyThreadMap = new HashMap<>();
+    pendingKeyCountMap = new HashMap<>();
     stateMap = new ConcurrentHashMap<>();
     outstandingTuples = new AtomicInteger(0);
     for (int i = 0; i < this.maxCore; i++) {
@@ -388,8 +389,8 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   }
 
   /**
-   *  Get the keyCount map
-   *  @return keyCountMap
+   *  Get the getPendingKeyCountMap
+   *  @return getPendingKeyCountMap
    */
   protected HashMap<String, AtomicInteger> getKeyCountMap() {
     return this.keyCountMap;

@@ -14,11 +14,11 @@
 package com.twitter.heron.api.bolt;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.twitter.heron.api.utils.HMcomparator;
 
 /**
  * Created by zhengyang on 22/10/17.
@@ -32,12 +32,29 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
    */
   public void runBolt() {
 
+    // HM (O(1))is used initially for for quick access to tuples and count
+    // TM (O(log n) itself couldnt help as it is sorted on key not on value
+    // hence the round about way to sort
+    if (getDebug()) {
+      System.out.println("FFD ::Starting");
+    }
+
     // sort HM to get keys by descending load order
     HMcomparator hmSorter = new HMcomparator(getPendingKeyCountMap());
-    TreeMap<String, Integer> descendingValueMap = new TreeMap<String, Integer>(hmSorter);
+    TreeMap<String, Integer> descendingValueMap = new TreeMap<>(hmSorter);
+    descendingValueMap.putAll(getPendingKeyCountMap());
 
     // target capacity where all tuples are evenly divided
     int targetCapacity = (int) (Math.ceil(getNumOutStanding() * 1.0 / getNumCore()));
+
+    if (getDebug()) {
+      System.out.println("FFD ::numOutstanding: " + Integer.toString(getNumOutStanding()));
+      System.out.println("FFD ::numcore       : " + Integer.toString(getNumCore()));
+      System.out.println("FFD ::targetCapacity: " + Integer.toString(targetCapacity));
+      System.out.println(getPendingKeyCountMap());
+      System.out.println(getPendingKeyCountMap().keySet());
+      System.out.println(descendingValueMap.keySet());
+    }
 
     // initialize core capacity to target capacity
     ArrayList<Integer> coreCapacity = new ArrayList<>(getNumCore());
@@ -51,7 +68,7 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
     // Assign Core using modififed DFF algo
     for (String key: descendingValueMap.keySet()) {
       boolean added = false;
-      int keySize = descendingValueMap.get(key);
+      int keySize = getPendingKeyCountMap().get(key);
       // find to see if can fit into any core
       for (int i = 0; i < getNumCore(); i++) {
         if (coreCapacity.get(i) > keySize) {
@@ -59,6 +76,7 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
           keyThreadMap.put(key, i);
           keyCountMap.put(key, new AtomicInteger(1));
           added = true;
+          System.out.println(i + "|" +  keySize);
           break;
         }
       }
@@ -68,6 +86,7 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
         coreCapacity.set(maxCapacityCore, coreCapacity.get(maxCapacityCore) - keySize);
         keyThreadMap.put(key, maxCapacityCore);
         keyCountMap.put(key, new AtomicInteger(0));
+        System.out.println(maxCapacityCore + "|" +  keySize);
       }
     }
 
@@ -87,22 +106,6 @@ public abstract class FFDElasticBolt extends BaseElasticBolt implements IElastic
       }
     }
     return maxCapacityCore;
-  }
-
-  class HMcomparator implements Comparator<String> {
-    private Map<String, Integer> originalMap;
-
-    HMcomparator(Map<String, Integer> originalMap) {
-      this.originalMap = originalMap;
-    }
-
-    public int compare(String a, String b) {
-      if (originalMap.get(a) >= originalMap.get(b)) {
-        return -1;
-      } else {
-        return 1;
-      }
-    }
   }
 }
 
