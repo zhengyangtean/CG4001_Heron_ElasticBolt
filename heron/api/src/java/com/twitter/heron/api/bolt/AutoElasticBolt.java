@@ -29,13 +29,11 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
     // get the number of distinct keys for this iteration
     int numKey = getNumDistinctKeys();
     // get what is the max number of cores available is a min of (user definition , system resource)
-    int newNumberOfCores = 0;
+    int newNumberOfCores = getUserDefinedNumCore();
     int delta = 0;
     int bestRuns = Integer.MAX_VALUE;
     // find the core minimal number of runs required to finish processing data
     for (int i = 1; i <= getUserDefinedNumCore(); i++) {
-      // stop once we found a match
-
       int numRuns = numKey / i;
       if (numKey % i != 0) {
         numRuns++;
@@ -44,13 +42,11 @@ public abstract class AutoElasticBolt extends BaseElasticBolt implements IElasti
         bestRuns = numRuns;
         newNumberOfCores = i;
       }
+      // stop once a 1 run is found, a best case scenario
+      if (bestRuns == 1) {
+        break;
+      }
     }
-
-    // Fallback, we default to max number of cores allowed
-    if (newNumberOfCores == 0) {
-      newNumberOfCores = getUserDefinedNumCore();
-    }
-
     // calculate the number of cores to scale up or down
     delta = this.getNumCore() - newNumberOfCores;
 
