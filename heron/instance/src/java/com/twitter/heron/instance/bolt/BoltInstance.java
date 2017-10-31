@@ -295,19 +295,12 @@ public class BoltInstance implements IInstance {
             // Update metrics
             boltMetrics.executeTuple(stream.getId(), stream.getComponentName(), executeLatency);
           }
-
-          // check to see if we have aggregated the number of targeted batch, if so runBolt
-          if (((IElasticBolt) bolt).incrementAndGetNumBatch()
-              == ((IElasticBolt) bolt).getMaxNumBatches()) {
-            ((IElasticBolt) bolt).runBolt();
-            int sleepDuration = ((IElasticBolt) bolt).getSleepDuration();
-            // boltInstance to wait and periodically (set by user) check
-            // if bolt has finished running
-            while (((IElasticBolt) bolt).getNumOutStanding() > 0) {
-              Utils.sleep(sleepDuration);
-            }
-            // finish running, prep for next batch of aggregation
-            ((IElasticBolt) bolt).resetNumBatch();
+          ((IElasticBolt) bolt).runBolt();
+          int sleepDuration = ((IElasticBolt) bolt).getSleepDuration();
+          // boltInstance to wait and periodically (set by user) check
+          // if bolt has finished running
+          while (((IElasticBolt) bolt).getNumOutStanding() > 0) {
+            Utils.sleep(sleepDuration);
           }
         } else {
           for (HeronTuples.HeronDataTuple dataTuple : tuples.getData().getTuplesList()) {

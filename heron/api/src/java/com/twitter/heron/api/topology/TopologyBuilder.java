@@ -175,7 +175,8 @@ public class TopologyBuilder {
    * Potentially faster and more aggressive bolt which preloads all available tuple at once
    * Using threads to enable concurrent processing of multiple tuples at once within a bolt,*
    *
-   * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
+   * @param id the id of this component. This id is referenced by other components that want to
+   * consume this bolt's outputs.
    * @param bolt bolt which is of IElasticBolt
    * @param desiredParallelism the number Elasticbolts to be created
    * @param numtds the initial number of threads per ElasticBolt
@@ -193,45 +194,6 @@ public class TopologyBuilder {
 
     // Validating number of threads to be always less than that of number of cores in java system
     int cores = Runtime.getRuntime().availableProcessors();
-    if (desiredParallelism * numtds > cores) {
-      realNumThread = Math.min(cores / desiredParallelism, 1);
-    }
-    bolt.setMaxCore(cores);
-    bolt.setNumCore(realNumThread);
-    bolt.setUserDefinedNumCore(realNumThread);
-    bolt.setDebug(debug);
-    bolt.setSleepDuration(sleepDuration);
-
-    BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
-    bolts.put(id, b);
-    return b;
-  }
-
-  /**
-   * Define a new bolt in this topology. This defines a IElastic bolt, which is a
-   * Potentially faster and more aggressive bolt which preloads all available tuple at once
-   * Using threads to enable concurrent processing of multiple tuples at once within a bolt,*
-   *
-   * @param id the id of this component. This id is referenced by other components that want to
-   * consume this bolt's outputs.
-   * @param bolt bolt which is of IElasticBolt
-   * @param desiredParallelism the number Elasticbolts to be created
-   * @param numtds the initial number of threads per ElasticBolt
-   * @param debug should debug message be shown
-   * @param sleepDuration the amount of timeout in the case of "backpressure", important to set to
-   * a suitable amount to prevent bolt from overwhelming outstream, especially for simple and fast
-   * execute logic
-   * @param numBatchesPerRun the number of batches to aggregate before executing
-   * @return use the returned object to declare the inputs to this component
-   */
-  public BoltDeclarer setBolt(String id, IElasticBolt bolt, int desiredParallelism,
-                              int numtds, boolean debug, int sleepDuration, int numBatchesPerRun) {
-    validateComponentName(id);
-
-    int realNumThread = numtds;
-
-    // Validating number of threads to be always less than that of number of cores in java system
-    int cores = Runtime.getRuntime().availableProcessors();
     if (numtds > cores) {
       realNumThread = cores;
     }
@@ -240,7 +202,6 @@ public class TopologyBuilder {
     bolt.setUserDefinedNumCore(realNumThread);
     bolt.setDebug(debug);
     bolt.setSleepDuration(sleepDuration);
-    bolt.setMaxNumBatches(numBatchesPerRun);
 
     BoltDeclarer b = new BoltDeclarer(id, bolt, desiredParallelism);
     bolts.put(id, b);

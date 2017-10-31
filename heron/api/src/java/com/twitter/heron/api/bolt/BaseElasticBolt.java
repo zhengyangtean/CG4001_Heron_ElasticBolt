@@ -36,8 +36,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
   private OutputCollector collector;
 
   private int sleepDuration = 20; // decide the sleep duration during checks by boltinstance
-  private int maxNumBatches = 1;  // decide number of batch to aggregate before executing tuples
-  private int currentPacketNumber = 0; // tracks the number of packet being aggregated
   private boolean debug = false;   // To decide to print debug lines or not
 
   /**
@@ -296,42 +294,6 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    */
   public synchronized void emitTuple(Tuple tuple, Values value) {
     collector.emit(tuple, value);
-  }
-
-  /**
-   * get the number of batches of tuples to aggregate from upstream before processing
-   * <p>
-   * @return  max number of batches to aggregate
-   */
-  public int getMaxNumBatches() {
-    return maxNumBatches;
-  }
-
-  /**
-   * Set the number of batches of tuples to aggregate from upstream before processing
-   * <p>
-   * @param numBatch number of batches
-   */
-  public void setMaxNumBatches(int numBatch) {
-    this.maxNumBatches = numBatch;
-  }
-
-  /**
-   * increment and track the current batch of tuples being aggregated
-   * <p>
-   * @return the current number of batches aggregated
-   */
-  public int incrementAndGetNumBatch() {
-    currentPacketNumber += 1;
-    return currentPacketNumber;
-  }
-
-  /**
-   * resets the number of batches that have been aggregated
-   * used when we have finish aggregating and started processing tuples
-   */
-  public void resetNumBatch() {
-    currentPacketNumber = 0;
   }
 
   /**

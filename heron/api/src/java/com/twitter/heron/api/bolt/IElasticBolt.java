@@ -131,33 +131,6 @@ public interface IElasticBolt extends IRichBolt {
   void emitTuple(Tuple tuple, Values value);
 
   /**
-   * get the number of batches of tuples to aggregate from upstream before processing
-   * <p>
-   * @return  max number of batches to aggregate
-   */
-  int getMaxNumBatches();
-
-  /**
-   * Set the number of batches of tuples to aggregate from upstream before processing
-   * <p>
-   * @param numBatch number of batches
-   */
-  void setMaxNumBatches(int numBatch);
-
-  /**
-   * increment and track the current batch of tuples being aggregated
-   * <p>
-   * @return the current number of batches aggregated
-   */
-  int incrementAndGetNumBatch();
-
-  /**
-   * resets the number of batches that have been aggregated
-   * used when we have finish aggregating and started processing tuples
-   */
-  void resetNumBatch();
-
-  /**
    * Check the amount of time that boltInstance is to sleep while bolt executing tuples before
    * checking to see if bolt have finish executing tuples
    * <p>
