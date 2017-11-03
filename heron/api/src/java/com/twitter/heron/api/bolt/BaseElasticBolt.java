@@ -420,7 +420,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * @param key key to increment
    * @param amountToIncrease
    */
-  public synchronized int incrementAndGetState(String key, int amountToIncrease) {
+  public int incrementAndGetState(String key, int amountToIncrease) {
     if (stateMap.get(key) == null) {
       stateMap.put(key, amountToIncrease);
       return amountToIncrease;
@@ -437,7 +437,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * @param key key to increment
    * @param amountToDecrease
    */
-  public synchronized int decrementAndGetState(String key, int amountToDecrease) {
+  public int decrementAndGetState(String key, int amountToDecrease) {
     if (stateMap.get(key) == null) {
       stateMap.put(key, amountToDecrease);
       return amountToDecrease;
@@ -453,7 +453,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * <p>
    * @param key
    */
-  public synchronized int getState(String key) {
+  public int getState(String key) {
     return stateMap.get(key);
   }
 
@@ -463,7 +463,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * @param key
    * @param defaultValue value to default to if key is not found in state maps
    */
-  public synchronized int getState(String key, int defaultValue) {
+  public int getState(String key, int defaultValue) {
     if (stateMap.get(key) == null) {
       return defaultValue;
     }
@@ -476,7 +476,7 @@ public abstract class BaseElasticBolt extends BaseComponent implements IElasticB
    * @param key key to increment
    * @param value
    */
-  public synchronized void putState(String key, int value) {
+  public void putState(String key, int value) {
     stateMap.put(key, value);
   }
 
