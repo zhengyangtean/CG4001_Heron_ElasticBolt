@@ -35,6 +35,11 @@ public interface IElasticBolt extends IRichBolt {
   void initElasticBolt(OutputCollector boltCollector);
 
   /**
+   * Ingress for user defined logic to extend ElasticBolt
+   */
+  void runBoltHook();
+
+  /**
    * Ingress for boltInstance to call to start processing tuples after collecting sufficient tuples
    */
   void runBolt();
@@ -191,7 +196,7 @@ public interface IElasticBolt extends IRichBolt {
    * Increment the state of the key by amountToIncrease
    * <p>
    * @param key key to increment
-   * @param amountToIncrease
+   * @param amountToIncrease the amount to increase the key
    */
   int incrementAndGetState(String key, int amountToIncrease);
 
@@ -199,21 +204,21 @@ public interface IElasticBolt extends IRichBolt {
    * Decrement the state of the key by amountTODecrease
    * <p>
    * @param key key to increment
-   * @param amountToDecrease
+   * @param amountToDecrease the amount to decrease the key
    */
   int decrementAndGetState(String key, int amountToDecrease);
 
   /**
    * get state of key
    * <p>
-   * @param key
+   * @param key the key to retrieve
    */
   int getState(String key);
 
   /**
    * get state of key
    * <p>
-   * @param key
+   * @param key the key to retrieve
    * @param defaultValue value to default to if key is not found in state maps
    */
   int getState(String key, int defaultValue);
@@ -222,7 +227,7 @@ public interface IElasticBolt extends IRichBolt {
    * write state of the key by amountToDecrease
    * <p>
    * @param key key to increment
-   * @param value
+   * @param value the value to put for the given key
    */
   void putState(String key, int value);
 
