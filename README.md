@@ -1,8 +1,8 @@
 # Cloud Computing System design and Implementation
 
 This repository is a fork of Twitter's Heron <br>
-This fork contains ElasticBolt, an elastic alternative to RichBolts.
-
+This fork contains ElasticBolt, an elastic alternative to RichBolts. <br>
+Examples on how to use ElasticBolt can be found on https://github.com/zhengyangtean/CG4001_Elasticbolt_demo
 
 
 
